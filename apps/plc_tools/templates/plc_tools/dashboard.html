@@ -1,0 +1,17 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'plc_tools/widgets.css' %}">
+
+<div id="dashboard">
+    {% for widget in widgets %}
+        <div class="widget"
+             data-widget-id="{{ widget.external_id }}"
+             data-type="{{ widget.widget_type }}"
+             data-tag="{{ widget.tag.external_id }}"
+             title="{{ widget.tag.alias }}"
+             style="left: {{ widget.config.x }}px; top: {{ widget.config.y }}px;">
+            {% include "plc_tools/widgets/"|add:widget.widget_type|add:".html" %}
+        </div>
+    {% endfor %}
+</div>
+
+<script type="module" src="{% static 'plc_tools/dashboard.js' %}"></script>
