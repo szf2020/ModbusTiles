@@ -31,7 +31,37 @@ export function updateWidget(widget, value) { //TODO null values
         case "meter":
             widget.querySelector(".meter-bar").value = value;
             break;
+
+        case "slider":
+            if(widget.shouldUpdate)
+                widget.querySelector(".slider-input").value = value;
+            break;
     }
+}
+
+async function submitValue(widget, value) {
+    //TODO yes/no confirmation if configured?
+    widget.shouldUpdate = false;
+    clearTimeout(widget.timeoutID);
+
+    const response = await fetch(`/api/tag/${widget.dataset.tag}/write/`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken")
+        },
+        body: JSON.stringify({ value: value })
+    });
+
+    const result = await response.json();
+    console.log(result)
+    if (result.error) {
+        alert("Failed to write value: " + result.error);
+    }
+    
+    widget.timeoutID = setTimeout(() => {
+        widget.shouldUpdate = true;
+    }, 500); //TODO figure out a good duration
 }
 
 export function setupWidget(widget) {
@@ -40,28 +70,7 @@ export function setupWidget(widget) {
             widget.shouldUpdate = true;
             const input = widget.querySelector(".switch-input")
             input.addEventListener("change", async () => {
-                //TODO yes/no confirmation if configured?
-                widget.shouldUpdate = false;
-                clearTimeout(widget.timeoutID);
-
-                const response = await fetch(`/api/tag/${widget.dataset.tag}/write/`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-CSRFToken": getCookie("csrftoken")
-                    },
-                    body: JSON.stringify({ value: input.checked })
-                });
-            
-                const result = await response.json();
-                console.log(result)
-                if (result.error) {
-                    alert("Failed to write value: " + result.error);
-                }
-                
-                widget.timeoutID = setTimeout(() => {
-                    widget.shouldUpdate = true;
-                }, 500); //TODO figure out a good duration
+                submitValue(widget, input.checked);
             });
             break;
 
@@ -73,7 +82,34 @@ export function setupWidget(widget) {
             const bar = widget.querySelector(".meter-bar");
             bar.min = widget.config.min_value;
             bar.max = widget.config.max_value;
-            widget.querySelector(".min-label").textContent = bar.min;
-            widget.querySelector(".max-label").textContent = bar.max;
+            bar.low = widget.config.low_value;
+            bar.high = widget.config.high_value;
+            bar.optimum = widget.config.optimum_value;
+            if(widget.config.display_range) {
+                widget.querySelector(".min-label").textContent = bar.min;
+                widget.querySelector(".max-label").textContent = bar.max;
+            }
+            break;
+
+        case "slider":
+            const input2 = widget.querySelector(".slider-input")
+            input2.min = widget.config.min_value;
+            input2.max = widget.config.max_value;
+            if(widget.config.display_range) {
+                widget.querySelector(".min-label").textContent = input2.min;
+                widget.querySelector(".max-label").textContent = input2.max;
+            }
+
+            widget.shouldUpdate = true;
+            
+            input2.addEventListener("change", async () => {
+                submitValue(widget, input2.value);
+            });
+            input2.addEventListener("input", (e) => {
+                clearTimeout(widget.timeoutID);
+                widget.shouldUpdate = false;
+            })
+
+            break;
     }
 }

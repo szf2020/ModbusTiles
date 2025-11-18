@@ -142,6 +142,14 @@ class Command(BaseCommand):
             Tag.DataTypeChoices.STRING: client.DATATYPE.STRING
         }
 
+        match tag.data_type:
+            case Tag.DataTypeChoices.INT16 | Tag.DataTypeChoices.UINT16:
+                value = int(value)
+            case Tag.DataTypeChoices.FLOAT32:
+                value = float(value)
+            case Tag.DataTypeChoices.STRING:
+                value = str(value)
+
         match tag.channel:
             case Tag.ChannelChoices.HOLDING_REGISTER:
                 result = client.convert_to_registers(value, data_type=data_type_map[tag.data_type], word_order=tag.device.word_order)

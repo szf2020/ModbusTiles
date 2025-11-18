@@ -181,6 +181,25 @@ class Command(BaseCommand):
                 "scale_y" : 2,
                 "min_value" : 0,
                 "max_value" : 100,
+                "low_value" : 30,
+                "high_value" : 70,
+                "optimum_value" : 100,
+                "display_range" : False,
+            }
+        )
+
+        widget = DashboardWidget.objects.create(
+            dashboard=dashboard,
+            tag=tag3,
+            widget_type=DashboardWidget.WidgetTypeChoices.SLIDER,
+            config = {
+                "position_x": 200,
+                "position_y": 600,
+                "scale_x" : 2,
+                "scale_y" : 2,
+                "min_value" : 0,
+                "max_value" : 100,
+                "display_range" : True,
             }
         )
 
@@ -190,11 +209,30 @@ class Command(BaseCommand):
             widget_type=DashboardWidget.WidgetTypeChoices.METER,
             config = {
                 "position_x": 200,
-                "position_y": 600,
+                "position_y": 700,
                 "scale_x" : 2,
                 "scale_y" : 2,
                 "min_value" : 0,
                 "max_value" : 100,
+                "low_value" : 30,
+                "high_value" : 70,
+                "optimum_value" : 100,
+                "display_range" : False,
+            }
+        )
+
+        widget = DashboardWidget.objects.create(
+            dashboard=dashboard,
+            tag=tag4,
+            widget_type=DashboardWidget.WidgetTypeChoices.SLIDER,
+            config = {
+                "position_x": 200,
+                "position_y": 800,
+                "scale_x" : 2,
+                "scale_y" : 2,
+                "min_value" : 0,
+                "max_value" : 100,
+                "display_range" : True,
             }
         )
 
