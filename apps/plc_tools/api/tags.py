@@ -1,6 +1,7 @@
+import json
 from django.http import JsonResponse
-from ..models import TagHistoryEntry, Tag, DashboardWidget
-from django.views.decorators.http import require_GET
+from ..models import TagHistoryEntry, Tag, DashboardWidget, TagWriteRequest
+from django.views.decorators.http import require_GET, require_POST
 from django.shortcuts import get_object_or_404
 
 #def api_tag_latest(request, tag_id):
@@ -11,11 +12,7 @@ from django.shortcuts import get_object_or_404
 def api_tag_value(request, external_id):
     """ Returns the value of the tag stored in the database """
 
-    print("External id", external_id)
-
     tag = get_object_or_404(Tag, external_id=external_id)
-
-    print("Tag", tag)
 
     if not DashboardWidget.objects.filter(
         tag=tag,
@@ -25,3 +22,22 @@ def api_tag_value(request, external_id):
     #TODO shared dashboard
 
     return JsonResponse({"value": tag.current_value if tag else None})
+
+
+@require_POST
+#@login_required
+def api_write_tag(request, external_id):
+    tag = get_object_or_404(Tag, external_id=external_id)
+
+    # permission check
+    if not DashboardWidget.objects.filter(tag=tag, dashboard__owner=request.user).exists():
+        return JsonResponse({"error": "Forbidden"}, status=403)
+
+    data = json.loads(request.body)
+
+    TagWriteRequest.objects.create(
+        tag=tag,
+        value=data["value"],
+    )
+
+    return JsonResponse({"status": "queued"})

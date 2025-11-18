@@ -2,7 +2,7 @@ import time
 from django.core.management.base import BaseCommand, CommandError
 from pymodbus.client import ModbusTcpClient, ModbusUdpClient, ModbusSerialClient
 from pymodbus.exceptions import ConnectionException, ModbusIOException
-from ...models import Device, Tag, TagHistoryEntry
+from ...models import Device, Tag, TagHistoryEntry, TagWriteRequest
 from django.utils import timezone
 
 type ModbusClient = ModbusTcpClient | ModbusUdpClient | ModbusSerialClient
@@ -27,15 +27,24 @@ class Command(BaseCommand):
                 try:
                     client = self.__get_connection(device)
 
+                    writes = TagWriteRequest.objects.filter(processed=False, tag__device=device)
+                    print(writes)
+                    for req in writes:
+                        self.__write_value(client, req.tag, req.value)
+                        req.processed = True
+                        req.save()
+
                     tags = Tag.objects.filter(device=device, is_active=True)
                     #TODO read blocks instead of individual values?
                     for tag in tags:
                         value = self.__read_tag(client, tag)
                         self.__store_value(tag, value)
-                        #self.__store_value(tag.id, value)
 
                 except (ConnectionException, ModbusIOException, ConnectionError) as e: 
                     print(f"PLC connection error: {e}")
+                    continue
+
+
 
                 #except Exception as e:
                 #    print(f"Unexpected error: {e}")
@@ -51,14 +60,14 @@ class Command(BaseCommand):
                 case Device.ProtocolChoices.MODBUS_TCP:
                     conn = ModbusTcpClient(device.ip_address, port=device.port)
 
-                case Device.ProtocolChoices.MOBUS_UDP:
+                case Device.ProtocolChoices.MODBUS_UDP:
                     conn = ModbusUdpClient(device.ip_address, port=device.port)
                 #case Device.ProtocolChoices.MODBUS_RTU:
                 #    conn = ModbusSerialClient(device.port)
             if conn.connect():
                 print("Established connection", conn)
             else:
-                raise ConnectionError("Could not connect to PLC")
+                raise ConnectionError("Could not connect to PLC", conn)
 
         
         self.connections[device.alias] = conn
@@ -88,6 +97,7 @@ class Command(BaseCommand):
         result = read_map[tag.channel](tag.address, count=tag.register_count, device_id=tag.unit_id)
 
         if result.isError():
+            #raise Exception("Read error:", result) 
             print("Error:", result) #TODO
             return None
         
@@ -123,9 +133,10 @@ class Command(BaseCommand):
                 to_delete.delete()
 
         
-    def __write_value(self, client: ModbusClient, tag: Tag):
-        """ Attemps to write the tag's current value to the tag's associated register(s) """
-        data_type_map  = {
+    def __write_value(self, client: ModbusClient, tag: Tag, value):
+        """ Attemps to write a value to the tag's associated register(s) """
+        print("writing something")
+        data_type_map  = { #TODO reuse this? 
             Tag.DataTypeChoices.INT16: client.DATATYPE.INT16,
             Tag.DataTypeChoices.UINT16: client.DATATYPE.UINT16,
             Tag.DataTypeChoices.FLOAT32: client.DATATYPE.FLOAT32,
@@ -134,14 +145,15 @@ class Command(BaseCommand):
 
         match tag.channel:
             case Tag.ChannelChoices.HOLDING_REGISTER:
-                result = client.convert_to_registers(tag.current_value, data_type=data_type_map[tag.data_type], word_order=tag.device.word_order)
+                result = client.convert_to_registers(value, data_type=data_type_map[tag.data_type], word_order=tag.device.word_order)
                 client.write_registers(tag.address, result, device_id=tag.unit_id)
 
             case Tag.ChannelChoices.COIL:
-                client.write_coils(tag.address, tag.current_value, device_id=tag.unit_id)
+                client.write_coils(tag.address, [value], device_id=tag.unit_id)
 
             case _:
-                raise Exception("Tried to write with a read-only tag")
+                print("Error: Tried to write with a read-only tag")
+                #raise IOError("Tried to write with a read-only tag") #TODO catch this error
 
         
     

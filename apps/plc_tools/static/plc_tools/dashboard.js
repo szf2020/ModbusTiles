@@ -1,10 +1,6 @@
-import { updateWidget } from './widgets.js'
+import { updateWidget, setupWidget } from './widgets.js'
 
 document.querySelectorAll(".widget").forEach(widget => {
-    const tagId = widget.dataset.tag;
-    const widgetType = widget.dataset.type;
-
-    console.log(document.getElementById("config-" + widget.dataset.widget_id).textContent)
     const config = JSON.parse(document.getElementById("config-" + widget.dataset.widget_id).textContent);
     widget.config = config;
     //widget.baseTitle = widget.title;
@@ -14,18 +10,17 @@ document.querySelectorAll(".widget").forEach(widget => {
 
     widget.style.transform = `scale(${config.scale_x}, ${config.scale_y})`;
 
-    console.log("Found widget with id ", tagId, " type ", widgetType);
+    //console.log("Found widget with id ", widget.dataset.tag, " type ", widget.dataset.type);
 
-    if(tagId) {
+    setupWidget(widget);
+
+    if(widget.dataset.tag) {
         setInterval(() => { //TODO handle failed to fetch error?
-            fetch(`/api/tag/${tagId}/value/`)
+            fetch(`/api/tag/${widget.dataset.tag}/value/`)
                 .then(response => response.json())
                 .then(data => {
-                    updateWidget(widget, widgetType, data.value);
+                    updateWidget(widget, data.value);
                 });
         }, 500);
-    }
-    else {
-        updateWidget(widget, widgetType);
     }
 });

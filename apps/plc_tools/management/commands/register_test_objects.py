@@ -73,6 +73,18 @@ class Command(BaseCommand):
         )
         widget = DashboardWidget.objects.create(
             dashboard=dashboard,
+            tag=tag,
+            widget_type=DashboardWidget.WidgetTypeChoices.SWITCH,
+            config = {
+                "position_x": 100,
+                "position_y": 200,
+                "scale_x" : 1,
+                "scale_y" : 1,
+            }
+        )
+
+        widget = DashboardWidget.objects.create(
+            dashboard=dashboard,
             tag=tag2,
             widget_type=DashboardWidget.WidgetTypeChoices.LED,
             config = {
@@ -97,6 +109,19 @@ class Command(BaseCommand):
                 "text_off": "Off",
             }
         )
+        widget = DashboardWidget.objects.create(
+            dashboard=dashboard,
+            tag=tag2,
+            widget_type=DashboardWidget.WidgetTypeChoices.SWITCH,
+            config = {
+                "position_x": 200,
+                "position_y": 200,
+                "scale_x" : 1,
+                "scale_y" : 1,
+            }
+        )
+
+
         widget = DashboardWidget.objects.create(
             dashboard=dashboard,
             widget_type=DashboardWidget.WidgetTypeChoices.LABEL,

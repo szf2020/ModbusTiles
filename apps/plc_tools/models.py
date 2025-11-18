@@ -71,6 +71,10 @@ class Tag(models.Model):
         help_text="Keep at most N recent entries; null = unlimited",
         default=0
     )
+    #max_write_entries = models.PositiveIntegerField(
+    #    null=True, blank=True,
+    #    default=0
+    #)
 
     current_value = models.JSONField(null=True)
     is_active = models.BooleanField(default=True)
@@ -100,6 +104,13 @@ class TagHistoryEntry(models.Model):
         return f"{self.tag.alias}: {self.value} @ {self.timestamp}"
 
 
+class TagWriteRequest(models.Model):
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
+    value = models.JSONField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    processed = models.BooleanField(default=False)
+
+
 class Dashboard(models.Model):
     alias = models.SlugField(max_length=100)
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -123,6 +134,7 @@ class DashboardWidget(models.Model):
         LINE_CHART = "chart", _("Time-Series Chart")
         BUTTON = "button", _("Button")
         LABEL = "label", _("Text Label")
+        SWITCH = "switch", _("Switch")
         #("gauge", "Gauge"),
         #("slider", "Slider"),
 
