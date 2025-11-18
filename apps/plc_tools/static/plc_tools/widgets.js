@@ -12,6 +12,7 @@ export function updateWidget(widget, type, value) {
         case "button":
             break;
         case "label":
+            widget.textContent = widget.config.text;
             break;
     }
 }

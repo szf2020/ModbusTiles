@@ -15,12 +15,16 @@ document.querySelectorAll(".widget").forEach(widget => {
 
     console.log("Found widget with id ", tagId, " type ", widgetType);
 
-    setInterval(() => { //TODO handle failed to fetch error?
-        fetch(`/api/tag/${tagId}/value/`)
-            .then(response => response.json())
-            .then(data => {
-                updateWidget(widget, widgetType, data.value);
-            });
-    }, 500);
-
+    if(tagId) {
+        setInterval(() => { //TODO handle failed to fetch error?
+            fetch(`/api/tag/${tagId}/value/`)
+                .then(response => response.json())
+                .then(data => {
+                    updateWidget(widget, widgetType, data.value);
+                });
+        }, 500);
+    }
+    else {
+        updateWidget(widget, widgetType);
+    }
 });

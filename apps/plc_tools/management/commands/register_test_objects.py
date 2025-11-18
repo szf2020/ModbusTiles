@@ -13,6 +13,7 @@ class Command(BaseCommand):
         tag, created = Tag.objects.get_or_create(
             device=device,
             alias="Test Coil",
+            description="PLC coil 0",
             register_count=1,
             defaults={
                 "channel": Tag.ChannelChoices.COIL,
@@ -23,6 +24,7 @@ class Command(BaseCommand):
         tag2, created = Tag.objects.get_or_create(
             device=device,
             alias="Test Coil 2",
+            description="PLC coil 1",
             register_count=1,
             defaults={
                 "channel": Tag.ChannelChoices.COIL,
@@ -47,37 +49,44 @@ class Command(BaseCommand):
             alias="TestDashboard",
         )
 
-        widget, created = DashboardWidget.objects.get_or_create(
+        widget = DashboardWidget.objects.create(
             dashboard=dashboard,
             tag=tag,
-            defaults={
-                "widget_type": DashboardWidget.WidgetTypeChoices.LED,
-                "config": {
-                    "position_x": 100,
-                    "position_y": 100,
-                    "scale_x" : 3,
-                    "scale_y" : 3,
-                    "color_on": "green",
-                    "color_off": "red",
-                    "label": "Test Coil"
-                }
+            widget_type=DashboardWidget.WidgetTypeChoices.LED,
+            config = {
+                "position_x": 100,
+                "position_y": 100,
+                "scale_x" : 3,
+                "scale_y" : 3,
+                "color_on": "green",
+                "color_off": "red",
+                "label": "Test Coil"
             }
         )
-        widget, created = DashboardWidget.objects.get_or_create(
+        widget = DashboardWidget.objects.create(
             dashboard=dashboard,
             tag=tag2,
-            defaults={
-                "widget_type": DashboardWidget.WidgetTypeChoices.LED,
-                "tag": tag2,
-                "config": {
-                    "position_x": 200,
-                    "position_y": 100,
-                    "scale_x" : 3,
-                    "scale_y" : 3,
-                    "color_on": "green",
-                    "color_off": "red",
-                    "label": "Test Coil"
-                }
+            widget_type=DashboardWidget.WidgetTypeChoices.LED,
+            config = {
+                "position_x": 200,
+                "position_y": 100,
+                "scale_x" : 3,
+                "scale_y" : 3,
+                "color_on": "green",
+                "color_off": "red",
+                "label": "Test Coil 2"
+            }
+        )
+        widget = DashboardWidget.objects.create(
+            dashboard=dashboard,
+            widget_type=DashboardWidget.WidgetTypeChoices.LABEL,
+            config = {
+                "position_x": 100,
+                "position_y": 30,
+                "scale_x" : 2,
+                "scale_y" : 2,
+                "text" : "Test Coils",
+                "label": ""
             }
         )
         

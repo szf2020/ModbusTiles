@@ -57,6 +57,7 @@ class Tag(models.Model):
 
     alias = models.CharField(max_length=100)
     external_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    description = models.TextField(max_length=200, blank=True)
 
     channel = models.PositiveIntegerField(choices=ChannelChoices.choices)
     data_type = models.PositiveIntegerField(choices=DataTypeChoices.choices)
