@@ -1,10 +1,13 @@
 import time
+import logging
 from django.core.management.base import BaseCommand, CommandError
 from pymodbus.client import ModbusTcpClient, ModbusUdpClient, ModbusSerialClient
 from pymodbus.exceptions import ConnectionException, ModbusIOException
 from ...models import Device, Tag, TagHistoryEntry, TagWriteRequest, AlarmConfig, ActivatedAlarm, AlarmSubscription
 from django.utils import timezone
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 type ModbusClient = ModbusTcpClient | ModbusUdpClient | ModbusSerialClient
 #TODO tag value type?
 
@@ -41,33 +44,44 @@ class Command(BaseCommand):
         Finds or creates a connection for each device and updates the value of active tags
         """
         while True:
-            for device in Device.objects.all(): 
+            for device in Device.objects.all():
                 try:
                     client = self._get_connection(device)
-
-                    writes = TagWriteRequest.objects.filter(processed=False, tag__device=device)
-                    for req in writes:
-                        self._write_value(client, req.tag, req.value)
-                        req.processed = True
-                        req.save()
-
-                    tags = Tag.objects.filter(device=device, is_active=True)
-                    #TODO read blocks instead of individual values?
-                    for tag in tags:
-                        values = self._read_tag(client, tag)
-
-                        if not isinstance(values, str) and len(values) == 1:
-                            values = values[0] #TODO? could be confusing
-
-                        self._store_value(tag, values)
-                        self._process_alarms(tag)
-
-                except (ConnectionException, ModbusIOException, ConnectionError) as e: 
-                    print(f"PLC connection error: {e}")
+                except Exception as e:
+                    logger.warning(f"Error connecting to device {device}: {e}")
                     continue
+                
+                try:
+                    self._process_writes(client, device)
+                except Exception as e:
+                    logger.error(f"Couldn't process writes for {device}: {e}")
 
-                #except Exception as e:
-                #    print(f"Unexpected error: {e}")
+                tags = Tag.objects.filter(device=device, is_active=True)
+                #TODO read blocks instead of individual values?
+                for tag in tags:
+                    try:
+                        values = self._read_tag(client, tag)
+                    except (ConnectionException, ConnectionError, ConnectionResetError) as e:
+                        logger.error(f"No connection from {client}: {e}")
+                        self.connections[device.alias] = None
+                        break
+                    except Exception as e:
+                        logger.warning(f"Modbus Error reading {tag}: {e}")
+                        continue
+
+                    if not isinstance(values, str) and len(values) == 1:
+                        values = values[0] #TODO? could be confusing
+
+                    try:
+                        self._store_value(tag, values)
+                    except Exception as e:
+                        logger.warning(f"Couldn't save values {values} to tag {tag}: {e}")
+                        continue
+
+                    try:
+                        self._process_alarms(tag)
+                    except Exception as e:
+                        logger.warning(f"Coudn't process alarms for tag {tag}: {e}")
 
             time.sleep(0.25) #TODO individual device polling rates?
 
@@ -85,7 +99,7 @@ class Command(BaseCommand):
                 #case Device.ProtocolChoices.MODBUS_RTU:
                 #    conn = ModbusSerialClient(device.port)
             if conn.connect():
-                print("Established connection", conn)
+                logger.info(f"Established connection: {conn}")
             else:
                 raise ConnectionError("Could not connect to PLC", conn)
         
@@ -99,9 +113,7 @@ class Command(BaseCommand):
         result = func(tag.address, count=tag.get_read_count(), device_id=tag.unit_id)
 
         if result.isError():
-            #raise Exception("Read error:", result) 
-            print("Error:", result) #TODO
-            return None
+            raise Exception("Modbus returned an error code:", result) 
         
         # Input or holding registers
         if len(result.registers) > 0:
@@ -152,6 +164,14 @@ class Command(BaseCommand):
             timestamp__lt=cutoff_entry.timestamp
         ).delete()
 
+
+    def _process_writes(self, client: ModbusClient, device: Device):
+        writes = TagWriteRequest.objects.filter(processed=False, tag__device=device)
+        for req in writes:
+            self._write_value(client, req.tag, req.value)
+            req.processed = True
+            req.save()
+
         
     def _write_value(self, client: ModbusClient, tag: Tag, values):
         """ Attemps to write a value to the tag's associated register(s) """
@@ -159,17 +179,13 @@ class Command(BaseCommand):
         if not isinstance(values, list) and tag.data_type != Tag.DataTypeChoices.STRING:
             values = [values]
 
-        try:
-            match tag.data_type:
-                case Tag.DataTypeChoices.BOOL:
-                    values = [bool(value) for value in values]
-                case Tag.DataTypeChoices.INT16 | Tag.DataTypeChoices.UINT16:
-                    values = [int(value) for value in values]
-                case Tag.DataTypeChoices.FLOAT32:
-                    values = [float(value) for value in values]
-        except ValueError as e:
-            print("Error attempting to write registers:", e)
-            return
+        match tag.data_type:
+            case Tag.DataTypeChoices.BOOL:
+                values = [bool(value) for value in values]
+            case Tag.DataTypeChoices.INT16 | Tag.DataTypeChoices.UINT16:
+                values = [int(value) for value in values]
+            case Tag.DataTypeChoices.FLOAT32:
+                values = [float(value) for value in values]
 
         match tag.channel:
             case Tag.ChannelChoices.HOLDING_REGISTER:
@@ -180,67 +196,61 @@ class Command(BaseCommand):
                 client.write_coils(tag.address, values, device_id=tag.unit_id)
 
             case _:
-                print("Error: Tried to write with a read-only tag") #TODO does client side need to know about this?
-                return
-                #raise IOError("Tried to write with a read-only tag") #TODO catch this error
+                raise Exception("Tried to write with a read-only tag")
                 
 
     def _process_alarms(self, tag: Tag):
-            """ Trigger an alarm if the tag is in an alarm state """
+        """ Trigger an alarm if the tag is in an alarm state """
 
-            try:
-                value = int(tag.current_value)
-            except ValueError:
-                print("Error: Alarm state was not a valid integer:", tag)
-                return
+        value = int(tag.current_value)
 
-            alarm_config = AlarmConfig.objects.filter(trigger_value=value, tag=tag).first()
+        alarm_config = AlarmConfig.objects.filter(trigger_value=value, tag=tag).first()
 
-            if alarm_config:
-                active_alarm, created = ActivatedAlarm.objects.get_or_create(
-                    config=alarm_config,
-                    is_active=True,
-                )
-                if(created):
-                    print("Created an active alarm:", active_alarm)
+        if alarm_config:
+            active_alarm, created = ActivatedAlarm.objects.get_or_create(
+                config=alarm_config,
+                is_active=True,
+            )
+            if(created):
+                logger.info(f"Activated alarm: {active_alarm}")
 
-                self._handle_notification(active_alarm)
+            self._handle_notification(active_alarm)
 
-                # Disable other alarms active for the same tag
-                stale_alarms = ActivatedAlarm.objects.filter(
-                    config__tag=tag, 
-                    is_active=True
-                ).exclude(id=active_alarm.id)
+            # Disable other alarms active for the same tag
+            stale_alarms = ActivatedAlarm.objects.filter(
+                config__tag=tag, 
+                is_active=True
+            ).exclude(id=active_alarm.id)
 
-                for alarm in stale_alarms: #TODO batch?
-                    alarm.is_active = False
-                    alarm.save(update_fields=['is_active'])
-                    print("Disabled an alarm:", active_alarm)
+            for alarm in stale_alarms: #TODO batch?
+                alarm.is_active = False
+                alarm.save(update_fields=['is_active'])
+                logger.info(f"Disabled alarm: {alarm}")
 
-            else:
-                active_alarms = ActivatedAlarm.objects.filter(config__tag=tag, is_active=True)
-                if active_alarms.exists():
-                    active_alarms.update(is_active=False)
-                    print("All alarms cleared for tag:", tag)
+        else:
+            active_alarms = ActivatedAlarm.objects.filter(config__tag=tag, is_active=True)
+            if active_alarms.exists():
+                active_alarms.update(is_active=False)
+                logger.info(f"All alarms cleared for tag: {tag}")
 
     
     def _handle_notification(self, active_alarm: ActivatedAlarm):
-            now = timezone.now()
+        now = timezone.now()
 
-            # Check if we ever notified, or if the cooldown has passed
-            #TODO maybe the cooldown should be on the tag instead? So we don't get multiple emails about the different threat levels
-            if (active_alarm.config.last_notified is None) or \
-               (now - active_alarm.config.last_notified > active_alarm.config.notification_cooldown):
+        # Check if we ever notified, or if the cooldown has passed
+        #TODO maybe the cooldown should be on the tag instead? So we don't get multiple emails about the different threat levels
+        if (active_alarm.config.last_notified is None) or \
+            (now - active_alarm.config.last_notified > active_alarm.config.notification_cooldown):
 
-                #TODO batch multiple alarms into one email?
-                subs = AlarmSubscription.objects.filter(
-                            alarm_config=active_alarm.config, 
-                            email_enabled=True
-                        ).select_related('user')
-                
-                recipients = [sub.user.email for sub in subs if sub.user.email]
-                print(f"Sending Email to {recipients}: {active_alarm.config.message}")
-                #TODO
+            #TODO batch multiple alarms into one email?
+            subs = AlarmSubscription.objects.filter(
+                        alarm_config=active_alarm.config, 
+                        email_enabled=True
+                    ).select_related('user')
+            
+            recipients = [sub.user.email for sub in subs if sub.user.email]
+            logger.info(f"Sending Email to {recipients}: {active_alarm.config.message}")
+            #TODO
 
-                active_alarm.config.last_notified = now
-                active_alarm.config.save(update_fields=['last_notified'])
+            active_alarm.config.last_notified = now
+            active_alarm.config.save(update_fields=['last_notified'])

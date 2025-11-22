@@ -15,7 +15,6 @@
                 <span class="alarm-indicator"></span>
             </div>
         </div>
-
         {% with uuid=widget.external_id|stringformat:"s" %}
             {% with cfg_id="config-"|add:uuid %}
                 {{ widget.config|json_script:cfg_id }}
