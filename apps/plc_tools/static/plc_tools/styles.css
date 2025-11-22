@@ -14,8 +14,22 @@
   top: 0.3em;
   line-height: 0;
 }
+.connection-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #d9534f;
+    color: white;
+    text-align: center;
+    padding: 5px;
+    font-weight: bold;
+    z-index: 9999;
+    transition: transform 0.3s ease-in-out;
+}
 @keyframes pulse-red {
     0% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7); }
     70% { box-shadow: 0 0 0 10px rgba(255, 68, 68, 0); }
     100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0); }
 }
+

@@ -3,6 +3,7 @@ import { getCookie } from "./util.js";
 export class TagPoller {
     constructor() {
         this.tagMap = {}; // tag → [widgets]
+        this.connectionBanner = document.querySelector(".connection-banner")
     }
 
     registerWidget(widget) {
@@ -15,7 +16,8 @@ export class TagPoller {
     }
 
     start(interval = 500) {
-        setInterval(() => this.pollAll(), interval);
+        this.connectionBanner.classList.add("hidden");
+        this.intervalID = setInterval(() => this.pollAll(), interval);
     }
 
     async pollAll() {
@@ -48,6 +50,8 @@ export class TagPoller {
         } 
         catch (err) {
             console.error("Polling error:", err);
+            clearTimeout(this.intervalID);
+            this.connectionBanner.classList.remove("hidden");
         }
     }
 }

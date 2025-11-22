@@ -3,6 +3,7 @@
 <link rel="stylesheet" href="{% static 'plc_tools/styles.css' %}">
 
 <div id="dashboard" class="container">
+    <div class="connection-banner hidden">⚠️ No connection</div>
     {% for widget in widgets %}
         <div class="widget"
              data-widgetid="{{ widget.external_id }}"
