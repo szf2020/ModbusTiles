@@ -23,6 +23,11 @@ echo.
 echo *** REGISTERING TEST OBJECTS ***
 python manage.py register_test_objects
 
+REM ---------- COLLECT STATICS ----------
+echo.
+echo *** COLLECTING STATIC FILES ***
+python manage.py collectstatic --noinput
+
 REM ---------- START PLC SIMULATOR ----------
 echo.
 echo *** STARTING PLC SIMULATOR ***
@@ -36,6 +41,7 @@ start cmd /k "call .venv\Scripts\activate && python manage.py poll_plcs"
 REM ---------- START DJANGO SERVER ----------
 echo.
 echo *** STARTING DJANGO SERVER ***
-python manage.py runserver 0.0.0.0:8000
+REM python manage.py runserver 0.0.0.0:8000
+daphne plc_monitor.asgi:application
 
 pause

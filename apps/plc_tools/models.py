@@ -143,7 +143,7 @@ class AlarmConfig(models.Model):
 
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name="alarm_configs")
     
-    trigger_value = models.JSONField(default=lambda: True, help_text="Value that triggers this alarm")
+    trigger_value = models.JSONField(help_text="Value that triggers this alarm")
     
     # Enrichment data
     message = models.CharField(max_length=200, help_text="e.g., 'Sump Pump Failure - Check Breaker'")

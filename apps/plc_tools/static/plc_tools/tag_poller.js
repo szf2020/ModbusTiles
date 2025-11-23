@@ -15,43 +15,27 @@ export class TagPoller {
         this.tagMap[widget.tag].push(widget);
     }
 
-    start(interval = 500) {
+    start() {
+        console.log("Starting")
+
         this.connectionBanner.classList.add("hidden");
-        this.intervalID = setInterval(() => this.pollAll(), interval);
-    }
 
-    async pollAll() {
-        const tagIds = Object.keys(this.tagMap);
-        if (tagIds.length === 0) return;
+        const tagIds = Object.keys(this.tagMap).join(",");
+        const evt = new EventSource(`/events/tag-updates/?tags=${tagIds}`);
 
-        try {
-            const response = await fetch(`/api/tag/values/`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": getCookie("csrftoken")
-                },
-                body: JSON.stringify({ tag_ids: tagIds })
-            });
-
-            if (!response.ok) throw new Error("Batch fetch failed");
-
-            const data = await response.json();
-
-            // Distribute data to widgets
-            for (const [tagId, tagData] of Object.entries(data)) {
+        evt.onmessage = (event) => {
+            const updated = JSON.parse(event.data);
+            console.log(updated);
+            for (const [tagId, tagData] of Object.entries(updated)) {
                 if (this.tagMap[tagId]) {
-                    this.tagMap[tagId].forEach(widget => {
-                        widget.onData(tagData); 
-                    });
+                    this.tagMap[tagId].forEach(widget => widget.onData(tagData));
                 }
             }
+        };
 
-        } 
-        catch (err) {
-            console.error("Polling error:", err);
-            clearTimeout(this.intervalID);
+        evt.onerror = () => {
+            console.warn("SSE connection lost");
             this.connectionBanner.classList.remove("hidden");
-        }
+        };
     }
 }

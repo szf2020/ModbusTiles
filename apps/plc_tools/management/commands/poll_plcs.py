@@ -1,15 +1,17 @@
 import time
 import logging
-from django.core.management.base import BaseCommand, CommandError
+import redis
+import json
+from ...models import Device, Tag, TagHistoryEntry, TagWriteRequest, AlarmConfig, ActivatedAlarm, AlarmSubscription
 from pymodbus.client import ModbusTcpClient, ModbusUdpClient, ModbusSerialClient
 from pymodbus.exceptions import ConnectionException, ModbusIOException
-from ...models import Device, Tag, TagHistoryEntry, TagWriteRequest, AlarmConfig, ActivatedAlarm, AlarmSubscription
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-type ModbusClient = ModbusTcpClient | ModbusUdpClient | ModbusSerialClient
-#TODO tag value type?
+
+type ModbusClient = ModbusTcpClient | ModbusUdpClient | ModbusSerialClient#TODO tag value type?
 
 def get_modbus_reader(client: ModbusClient, tag: Tag):
     """ Returns the function needed for reading a tag """
@@ -43,7 +45,11 @@ class Command(BaseCommand):
         Queries the database for devices and tags,
         Finds or creates a connection for each device and updates the value of active tags
         """
+        r = redis.Redis()
+
         while True:
+            update_data = {}
+
             for device in Device.objects.all():
                 try:
                     client = self._get_connection(device)
@@ -78,11 +84,23 @@ class Command(BaseCommand):
                         logger.warning(f"Couldn't save values {values} to tag {tag}: {e}")
                         continue
 
+                    #TODO only set this if the value changed? Could be a bool on tags.
+                    #TODO only set if it's currently subscribed to?
+                    
                     #try:
                     self._process_alarms(tag)
+
+                    active_alarm = ActivatedAlarm.objects.filter(
+                        config__tag=tag, 
+                        is_active=True
+                    ).select_related('config').first()
+
+                    alarm = {"message": active_alarm.config.message, "level" : active_alarm.config.threat_level} if active_alarm else None
+
+                    update_data[str(tag.external_id)] = {"value": tag.current_value, "time": str(tag.last_updated), "alarm": alarm}
                     #except Exception as e:
                     #    logger.warning(f"Coudn't process alarms for tag {tag}: {e}")
-
+            r.publish("plc_events", json.dumps(update_data))
             time.sleep(0.25) #TODO individual device polling rates?
 
 
@@ -168,7 +186,7 @@ class Command(BaseCommand):
     def _process_writes(self, client: ModbusClient, device: Device):
         writes = TagWriteRequest.objects.filter(processed=False, tag__device=device)
         for req in writes:
-            self._write_value(client, req.tag, req.value)
+            self._write_value(client, req.tag, req.value) #TODO should i try/except here instead? should i log/notify server if it fails?
             req.processed = True
             req.save()
 
@@ -188,7 +206,7 @@ class Command(BaseCommand):
                 case Tag.DataTypeChoices.FLOAT32:
                     values = [float(value) for value in values]
         except ValueError:
-            logging.warning(f"Tag data type mismatch: writing {values} to {tag}")
+            logger.warning(f"Tag data type mismatch: writing {values} to {tag}")
             return
 
         match tag.channel:
@@ -200,12 +218,13 @@ class Command(BaseCommand):
                 client.write_coils(tag.address, values, device_id=tag.unit_id)
 
             case _:
-                raise Exception("Tried to write with a read-only tag")
+                logger.warning("Tried to write with a read-only tag")
+                return
                 
 
     def _process_alarms(self, tag: Tag):
         """ Trigger an alarm if the tag is in an alarm state """
-        
+
         alarm_config = AlarmConfig.objects.filter(trigger_value=tag.current_value, tag=tag).first()
 
         if alarm_config:
