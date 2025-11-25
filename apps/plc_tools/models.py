@@ -150,6 +150,7 @@ class Tag(models.Model):
         return {
             "value": self.current_value, 
             "time": str(self.last_updated), 
+            "age": (timezone.now() - self.last_updated).total_seconds(),
             "alarm": active_alarm.get_client_data() if active_alarm else None
         }
     

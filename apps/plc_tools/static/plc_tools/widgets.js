@@ -41,6 +41,11 @@ class Widget {
     }
 
     onData(data) {
+        if(data.age > 5)
+            this.elem.classList.add("no-connection");
+        else
+            this.elem.classList.remove("no-connection"); //TODO disable interactions?
+
         this.onValue(data.value, data.time);
         
         if(this.showAlarm)
