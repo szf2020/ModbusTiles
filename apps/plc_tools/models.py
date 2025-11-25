@@ -140,16 +140,52 @@ class Tag(models.Model):
         # Delete everything not in keep list
         TagHistoryEntry.objects.filter(tag=self).exclude(id__in=ids_to_keep).delete()
 
-    def get_client_data(self): #TODO do we need a batched version of this?
-        active_alarm = ActivatedAlarm.objects.filter(
-            config__tag=self, 
+    def get_client_data(self, active_alarm=...):
+        if active_alarm == ...:
+            active_alarm = ActivatedAlarm.objects.filter(
+                config__tag=self, 
+                is_active=True
+            ).select_related('config').first()
+
+        return {
+            "value": self.current_value, 
+            "time": str(self.last_updated), 
+            "alarm": active_alarm.get_client_data() if active_alarm else None
+        }
+    
+    def get_history(self, amount: timedelta):
+        cutoff = timezone.now() - amount
+        entries = TagHistoryEntry.objects.filter(
+            tag=self, 
+            timestamp__gte=cutoff
+        ).values('timestamp', 'value').order_by('timestamp')
+
+        return entries
+
+    def request_change(self, value):
+        TagWriteRequest.objects.create(
+            tag=self,
+            value=value,
+        ) #TODO probably limit in DB 
+    
+    @staticmethod
+    def get_client_data_multiple(tags):
+        active_alarms = ActivatedAlarm.objects.filter(
+            config__tag__in=tags, 
             is_active=True
-        ).select_related('config').first()
+        ).select_related('config', 'config__tag')
 
-        alarm = {"message": active_alarm.config.message, "level" : active_alarm.config.threat_level} if active_alarm else None
+        alarm_map = {
+            alarm.config.tag.external_id: alarm 
+            for alarm in active_alarms
+        }
 
-        return {"value": self.current_value, "time": str(self.last_updated), "alarm": alarm}
+        results = {}
+        for tag in tags:
+            alarm = alarm_map.get(tag.external_id)
+            results[str(tag.external_id)] = tag.get_client_data(alarm)
 
+        return results
 
     def __str__(self):
         return f"{self.alias} [{self.channel}:{self.address}]"
@@ -230,6 +266,13 @@ class AlarmConfig(models.Model):
                 active_alarms.update(is_active=False)
                 #logger.info(f"All alarms cleared for tag: {tag}")
             return None
+        
+    @classmethod
+    def check_alarms(cls):
+        for alarm_config in cls.objects.all():
+            activated = alarm_config.get_activation()
+            if(activated):
+                activated.handle_notifications()
 
     def __str__(self):
         return f"{self.tag.alias} == {self.trigger_value} -> {self.message}"
@@ -257,7 +300,9 @@ class ActivatedAlarm(models.Model):
     def should_notify(self):
         return (self.config.last_notified is None) or (timezone.now() - self.config.last_notified > self.config.notification_cooldown)
 
-    def send_notifications(self):
+    def handle_notifications(self):
+        if not self.should_notify():
+            return
         #TODO batch multiple alarms into one email?
         subs = AlarmSubscription.objects.filter(
                     alarm_config=self.config, 
@@ -265,10 +310,16 @@ class ActivatedAlarm(models.Model):
                 ).select_related('user')
         
         recipients = [sub.user.email for sub in subs if sub.user.email]
-        #logger.info(f"Sending Email to {recipients}: {self.config.message}")
+        print(f"Sending Email to {recipients}: {self.config.message}") #TODO logging?
 
         self.config.last_notified = timezone.now()
         self.config.save(update_fields=['last_notified'])
+
+    def get_client_data(self):
+        return {
+            "message": self.config.message, 
+            "level": self.config.threat_level
+        }
 
     def __str__(self):
         return f"ALARM: {self.config.tag.alias} - {self.config.message} (Level {self.config.threat_level})"

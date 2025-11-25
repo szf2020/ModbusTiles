@@ -1,12 +1,12 @@
 import time
 import logging
-import redis
 import json
 from ...models import Device, Tag, TagHistoryEntry, TagWriteRequest, AlarmConfig, ActivatedAlarm, AlarmSubscription
 from pymodbus.client import ModbusTcpClient, ModbusUdpClient, ModbusSerialClient
 from pymodbus.exceptions import ConnectionException, ModbusIOException
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
+from django.db import connection
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -37,7 +37,6 @@ def get_modbus_datatype(client: ModbusClient, tag: Tag):
 class Command(BaseCommand):
     def handle(self, *args, **options):
         self._connections = {}
-        self._redis = redis.Redis()
         self._poll()
 
     
@@ -77,7 +76,7 @@ class Command(BaseCommand):
 
                     tag.set_value(values)
 
-            self._on_poll_cycle_complete()
+            AlarmConfig.check_alarms()
             time.sleep(0.25) #TODO individual device polling rates?
 
 
@@ -164,18 +163,3 @@ class Command(BaseCommand):
             case _:
                 logger.warning("Tried to write with a read-only tag")
                 return
-
-
-    def _on_poll_cycle_complete(self):
-        for alarm_config in AlarmConfig.objects.all():
-            activated = alarm_config.get_activation()
-            if(activated):
-                if(activated.should_notify()):
-                    activated.send_notifications()
-                    logger.info(f"Notifying alarm: {activated}")
-
-        update_data = {} #TODO try doing only one active_alarms query?
-        for tag in Tag.objects.filter(is_active=True, value_changed=True): #TODO bool for fetch if not value changed?
-            update_data[str(tag.external_id)] = tag.get_client_data()
-        
-        self._redis.publish("plc_events", json.dumps(update_data))
