@@ -192,3 +192,17 @@ class DashboardWidgetSerializer(serializers.ModelSerializer):
     class Meta:
         model = DashboardWidget
         fields = "__all__"
+
+
+class DashboardWidgetBulkSerializer(serializers.Serializer):
+    """ Used for the Save Dashboard payload """
+    
+    tag = serializers.SlugRelatedField(
+        slug_field='external_id',
+        queryset=Tag.objects.all(),
+        required=False, 
+        allow_null=True
+    )
+    
+    widget_type = serializers.ChoiceField(choices=DashboardWidget.WidgetTypeChoices.choices)
+    config = serializers.JSONField()

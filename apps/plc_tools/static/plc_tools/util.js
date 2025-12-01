@@ -13,3 +13,29 @@ export function getCookie(name) {
     }
     return cookieValue;
 }
+
+export async function postServer(input, payload, successMessage) {
+    try {
+        const response = await fetch(input, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            if(successMessage)
+                alert(successMessage);
+            return true;
+        } 
+        else {
+            const err = await response.json();
+            alert("Error: " + JSON.stringify(err));
+        }
+    } 
+    catch (e) {
+        console.error(e);
+    }
+}

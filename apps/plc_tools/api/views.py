@@ -5,13 +5,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import MethodNotAllowed
+from rest_framework.decorators import action
 from .serializers import TagDetailSerializer, TagDropdownSerializer, TagCreateSerializer, TagUpdateSerializer, TagValueSerializer, TagWriteRequestSerializer, TagHistoryEntrySerializer
 from .serializers import AlarmConfigSerializer, AlarmConfigDropdownSerializer, ActivatedAlarmSerializer
-from .serializers import DashboardDropdownSerializer, DashboardSerializer, DashboardWidgetSerializer
+from .serializers import DashboardDropdownSerializer, DashboardSerializer, DashboardWidgetSerializer, DashboardWidgetBulkSerializer
 from .serializers import DeviceSerializer, DeviceDropdownSerializer
 from ..models import DashboardWidget, Dashboard, Tag, Device, AlarmConfig, TagWriteRequest, TagHistoryEntry
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
+from django.db import transaction
 
 #TODO should the metadata views all be one class?
 
@@ -106,15 +108,64 @@ class TagWriteRequestViewSet(ModelViewSet):
         raise MethodNotAllowed("DELETE not allowed on TagWriteRequest")
 
 
+class DashboardViewSet(ModelViewSet):
+    # Lookup by 'alias' instead of 'id' in the URL
+    lookup_field = 'alias' 
+    serializer_class = DashboardSerializer
+
+    def get_queryset(self):
+        # Security: Only see your own dashboards
+        return Dashboard.objects.filter(owner=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='save-widgets')
+    def save_widgets(self, request, alias=None): #TODO have format doc for each view?
+        """
+        POST /api/dashboards/{alias}/save-widgets/
+        Body: [ { "tag": "uuid...", "widget_type": "led", "config": {...} }, ... ]
+        """
+        dashboard = self.get_object()
+        
+        # 1. Validate the Payload
+        serializer = DashboardWidgetBulkSerializer(data=request.data, many=True)
+        serializer.is_valid(raise_exception=True)
+        
+        # 2. Atomic Replacement
+        try:
+            with transaction.atomic():
+                # A. Wipe clean
+                dashboard.widgets.all().delete()
+                
+                # B. Prepare new objects
+                new_widgets = []
+                for item in serializer.validated_data:
+                    new_widgets.append(DashboardWidget(
+                        dashboard=dashboard,
+                        tag=item.get('tag'), # Will be a Tag object or None
+                        widget_type=item['widget_type'],
+                        config=item['config']
+                    ))
+                
+                DashboardWidget.objects.bulk_create(new_widgets)
+                
+        except Exception as e:
+            raise ValidationError(f"Save failed: {str(e)}")
+
+        return Response({"status": "saved", "count": len(new_widgets)})
+
+
 class DashboardWidgetViewSet(ModelViewSet):
     serializer_class = DashboardWidgetSerializer
     max_count = 99
 
     def get_queryset(self):
         # Only show widgets for dashboards owned by the user
-        return DashboardWidget.objects.filter(
-            dashboard__owner=self.request.user
-        )
+        qs = DashboardWidget.objects.filter(dashboard__owner=self.request.user)
+        
+        dashboard_alias = self.request.query_params.get('dashboard')
+        if dashboard_alias:
+            qs = qs.filter(dashboard__alias=dashboard_alias)
+            
+        return qs
 
     def perform_create(self, serializer):
         dashboard = serializer.validated_data["dashboard"]

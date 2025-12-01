@@ -145,7 +145,7 @@ class SwitchWidget extends Widget {
 class SliderWidget extends Widget {
     static displayName = "Slider";
     static allowedChannels = ["hr"];
-    static allowedTypes = ["int16, uint16, int32, uint32, int64, uint64, float32, float64"];
+    static allowedTypes = ["int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64"];
     static customFields = [
         { name: "min_value", type: "number", default: 0, label: "Minimum Value" },
         { name: "max_value", type: "number", default: 10, label: "Maximum Value" },
@@ -155,9 +155,7 @@ class SliderWidget extends Widget {
 
     constructor(widget_elem, config, tagID) {
         super(widget_elem, config, tagID);
-        console.log(widget_elem);
         this.input = this.elem.querySelector(".slider-input")
-        console.log(this.input);
         this.min_label = this.elem.querySelector(".min-label")
         this.max_label =  this.elem.querySelector(".max-label")
 
@@ -197,7 +195,7 @@ class SliderWidget extends Widget {
 class MeterWidget extends Widget {
     static displayName = "Meter";
     static allowedChannels = ["hr", "ir"];
-    static allowedTypes = ["int16, uint16, int32, uint32, int64, uint64, float32, float64"];
+    static allowedTypes = ["int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64"];
     static customFields = [
         { name: "min_value", type: "number", default: 0, label: "Minimum Value" },
         { name: "max_value", type: "number", default: 10, label: "Maximum Value" },
@@ -314,7 +312,7 @@ class ValueLabelWidget extends Widget {
 class ChartWidget extends Widget {
     static displayName = "History Chart";
     static allowedChannels = ["hr", "ir"]; //TODO support boolean values
-    static allowedTypes = ["int16, uint16, int32, uint32, int64, uint64, float32, float64"];
+    static allowedTypes = ["int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64"];
     static customFields = [
         { name: "title", type: "text", default: "Title", label: "Title" },
         { name: "history_seconds", type: "number", default: 60, label: "History Length (seconds)" },

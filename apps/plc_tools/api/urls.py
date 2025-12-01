@@ -7,7 +7,7 @@ router = DefaultRouter()
 router.register(r'devices', views.DeviceViewSet, basename='device')
 router.register(r'tags', views.TagViewSet, basename='tag')
 router.register(r'alarms', views.AlarmConfigViewSet, basename='alarm')
-router.register(r'dashboards', views.DashboardWidgetViewSet, basename='dashboard')
+router.register(r'dashboards', views.DashboardViewSet, basename='dashboard')
 router.register(r'write-requests', views.TagWriteRequestViewSet, basename='write-request')
 
 urlpatterns = [

@@ -1,7 +1,7 @@
 import { WidgetRegistry } from "./widgets.js";
 import { TagPoller } from "./tag_poller.js";
 import { GridStack } from 'https://cdn.jsdelivr.net/npm/gridstack@12.3.3/+esm'
-import { getCookie } from "./util.js";
+import { getCookie, postServer } from "./util.js";
 
 class Dashboard {
     constructor() {
@@ -16,6 +16,7 @@ class Dashboard {
         this.creatorItems = document.getElementById('palette');
         this.inspectorForm = document.getElementById('inspector-form');
         this.inspectButton = document.getElementById('inspect-button');
+        this.alias = document.getElementById('dashboard-container').dataset.alias;
         this.poller = new TagPoller();
         this.cache = {
             tags: [],
@@ -58,19 +59,21 @@ class Dashboard {
             const widgetType = configElem.dataset.type;
             const tagID = configElem.dataset.tagid;
             const title = configElem.dataset.title;
-            console.log(tagID);
             const config = JSON.parse(configElem.querySelector('script[type="application/json"]').textContent);
+
             const palette = document.getElementById('palette');
             const gridStackPaletteItem = palette.querySelector(`[data-type="${widgetType}"]`);
             const gridStackNewItem = gridStackPaletteItem.cloneNode(true);
             gridStackNewItem.title = title;
-            const widgetElem = gridStackNewItem.querySelector('.dashboard-widget');
+
             this.canvasGridStack.makeWidget(gridStackNewItem, {
                 x: config.position_x,
                 y: config.position_y,
                 w: config.scale_x,
                 h: config.scale_y,
             });
+
+            const widgetElem = gridStackNewItem.querySelector('.dashboard-widget');
             const widget = new WidgetRegistry[widgetType](widgetElem, config, tagID);
             this.poller.registerWidget(widget);
         })
@@ -131,19 +134,23 @@ class Dashboard {
             this.inspectGlobal();
             return;
         }
+        const widget = widgetElem.widgetInstance;
 
         activateTab(this.inspectButton);
         widgetElem.classList.add("selected");
 
         // Add title
         const title = document.createElement('p');
-        title.innerText = widgetElem.widgetInstance.constructor.displayName;
+        title.innerText = widget.constructor.displayName;
         title.className = "inspector-title";
         this.inspectorForm.appendChild(title);
 
         // Add fields
-        const widget = widgetElem.widgetInstance;
-        const allFields = [...widgetElem.widgetInstance.constructor.defaultFields, ...widgetElem.widgetInstance.constructor.customFields];
+        
+        const allFields = [
+            ...widget.constructor.defaultFields, 
+            ...widget.constructor.customFields
+        ];
 
         allFields.forEach(field => {
             const wrapper = document.createElement('div');
@@ -182,8 +189,7 @@ class Dashboard {
                         const opt = document.createElement('option');
                         opt.value = tag.external_id; // Using UUID
                         // Show useful info in the dropdown
-                        opt.text = `${tag.alias} [${tag.address}]`;
-                        console.log(widget.tag, tag.external_id);
+                        opt.text = `${tag.alias} [${tag.channel} ${tag.address}]`;
                         
                         if (widget.tag === tag.external_id) {
                             opt.selected = true;
@@ -222,10 +228,13 @@ class Dashboard {
                 // We could just send the update by removing tagid from the config and adding it to the request but that's icky
                 const val = field.type === 'bool' ? e.target.checked : e.target.value;
                 if(field.type === "tag_picker")
-                    widgetElem.widgetInstance.config[field.name] = val;
+                    widget.tag = val;
                 else
-                    widgetElem.widgetInstance.tag = e.target.value;
-                widgetElem.widgetInstance.applyConfig();
+                    widget.config[field.name] = val;
+                    
+                widget.applyConfig();
+
+                //TODO mark as dirty for prompting when closing page?
             });
             
             label.appendChild(input);
@@ -275,6 +284,8 @@ class Dashboard {
         const aliasUI = createInput("alias", "Tag Name");
         box.appendChild(aliasUI.wrapper);
 
+        //TODO description
+
         // Device Select
         const deviceUI = createInput("device", "Device", "select");
         this.cache.devices.forEach(d => {
@@ -300,7 +311,7 @@ class Dashboard {
         box.appendChild(channelUI.wrapper);
 
         // Data Type Select
-        const dataTypeUI = createInput("datatype", "Data Type", "select");
+        const dataTypeUI = createInput("datatype", "Data Type", "select"); //TODO remove channel-incompatible data types from list?
         this.cache.tagOptions.data_types.forEach(d => {
             const opt = document.createElement('option');
             opt.value = d.value;
@@ -320,7 +331,7 @@ class Dashboard {
         // Submit Button
         const btn = document.createElement('button');
         btn.innerText = "Save Tag";
-        btn.className = "btn-primary";
+        //btn.className = "btn-primary";
         btn.style.marginTop = "10px";
         
         btn.onclick = async () => {
@@ -336,14 +347,22 @@ class Dashboard {
                 is_active: true
             };
 
-            const result = await createTag(payload);
-            if(result) {
+            const result = await postServer('/api/tags/', payload, "Tag Created!");
+            if(result)
                 this.refreshData(); // Repopulate tag list
-            }
         };
         
         box.appendChild(btn);
         this.inspectorForm.appendChild(box);
+
+        //
+        const saveButton = document.createElement('button');
+        saveButton.innerText = "Save Dashboard";
+        btn.style.marginTop = "10px";
+        saveButton.onclick = async () => {
+            this.save();
+        }
+        this.inspectorForm.appendChild(saveButton);
     }
 
     async refreshData() {
@@ -373,48 +392,29 @@ class Dashboard {
         this.canvasGridStack.cellHeight(cellWidth);   // make rows match columns
     }
 
-    save() {
-        // send all the widget info
-        // backend should get all the widgets and update them accordingly
+    async save() {
+        const widgetsPayload = [];
 
-        const widgetUpdates = []
+        // Add widget info to payload
+        this.widgetGrid.querySelectorAll('.grid-stack-item').forEach(item => {
+            const widgetEl = item.querySelector('.dashboard-widget');
 
-        document.querySelectorAll('.dashboard-widget').forEach(el => {
-            const widget = el.widgetInstance;
-
-            widgetUpdates.push({
-                // Top level database fields
-                tag: widget.tagId, // The UUID string
-                widget_type: el.dataset.type,
-                config: widget.config
-            });
-        });
-        //TODO include dashboard alias
-        //const payload = 
-    }
-}
-
-async function createTag(payload) {
-    try {
-        const response = await fetch('/api/tags/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(payload)
+            if (widgetEl && widgetEl.widgetInstance) {
+                widgetsPayload.push({
+                    tag: widgetEl.widgetInstance.tag || null, 
+                    widget_type: item.dataset.type,
+                    config: widgetEl.widgetInstance.config
+                });
+            }
         });
 
-        if (response.ok) {
-            alert("Tag Created!");
-            return true;
-        } 
-        else {
-            const err = await response.json();
-            alert("Error: " + JSON.stringify(err));
-        }
-    } catch (e) {
-        console.error(e);
+        console.log("Saving...", widgetsPayload);
+
+        postServer(
+            `/api/dashboards/${this.alias}/save-widgets/`, 
+            widgetsPayload, 
+            `Dashboard Saved!`
+        );
     }
 }
 

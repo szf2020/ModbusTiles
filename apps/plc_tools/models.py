@@ -59,7 +59,7 @@ class Tag(models.Model):
     unit_id = models.PositiveIntegerField(default=1)
     owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
 
-    alias = models.CharField(max_length=100)
+    alias = models.CharField(max_length=100) #TODO enforce uniqueness?
     external_id = models.UUIDField(default=uuid.uuid4, unique=True)
     description = models.TextField(max_length=200, blank=True)
 
