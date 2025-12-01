@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.decorators import action
 from .serializers import TagDetailSerializer, TagDropdownSerializer, TagCreateSerializer, TagUpdateSerializer, TagValueSerializer, TagWriteRequestSerializer, TagHistoryEntrySerializer
-from .serializers import AlarmConfigSerializer, AlarmConfigDropdownSerializer, ActivatedAlarmSerializer
+from .serializers import AlarmConfigSerializer, AlarmConfigDropdownSerializer, AlarmConfigCreateSerializer, ActivatedAlarmSerializer
 from .serializers import DashboardDropdownSerializer, DashboardSerializer, DashboardWidgetSerializer, DashboardWidgetBulkSerializer
 from .serializers import DeviceSerializer, DeviceDropdownSerializer
 from ..models import DashboardWidget, Dashboard, Tag, Device, AlarmConfig, TagWriteRequest, TagHistoryEntry
@@ -109,12 +109,11 @@ class TagWriteRequestViewSet(ModelViewSet):
 
 
 class DashboardViewSet(ModelViewSet):
-    # Lookup by 'alias' instead of 'id' in the URL
     lookup_field = 'alias' 
     serializer_class = DashboardSerializer
 
     def get_queryset(self):
-        # Security: Only see your own dashboards
+        # Only see owned dashboards
         return Dashboard.objects.filter(owner=self.request.user)
 
     @action(detail=True, methods=['post'], url_path='save-widgets')
@@ -125,17 +124,16 @@ class DashboardViewSet(ModelViewSet):
         """
         dashboard = self.get_object()
         
-        # 1. Validate the Payload
+        # Validate
         serializer = DashboardWidgetBulkSerializer(data=request.data, many=True)
         serializer.is_valid(raise_exception=True)
         
-        # 2. Atomic Replacement
         try:
             with transaction.atomic():
-                # A. Wipe clean
+                # Wipe clean
                 dashboard.widgets.all().delete()
                 
-                # B. Prepare new objects
+                # Prepare new objects
                 new_widgets = []
                 for item in serializer.validated_data:
                     new_widgets.append(DashboardWidget(
@@ -158,7 +156,7 @@ class DashboardWidgetViewSet(ModelViewSet):
     max_count = 99
 
     def get_queryset(self):
-        # Only show widgets for dashboards owned by the user
+        # Only see owned widgets
         qs = DashboardWidget.objects.filter(dashboard__owner=self.request.user)
         
         dashboard_alias = self.request.query_params.get('dashboard')
@@ -183,6 +181,7 @@ class AlarmConfigViewSet(ModelViewSet):
     max_count = 999
     serializers = {
         "list": AlarmConfigDropdownSerializer,
+        "create": AlarmConfigCreateSerializer,
     }
 
     def get_queryset(self):

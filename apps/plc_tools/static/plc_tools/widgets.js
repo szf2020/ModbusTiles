@@ -241,8 +241,8 @@ class LEDWidget extends Widget {
     static allowedChannels = ["coil", "di"];
     static allowedTypes = ["bool"];
     static customFields = [
-        { name: "color_on", type: "color", default: "green", label: "On Color" },
-        { name: "color_off", type: "color", default: "red", label: "Off Color" },
+        { name: "color_on", type: "color", default: "#00FF00", label: "On Color" },
+        { name: "color_off", type: "color", default: "#FF0000", label: "Off Color" },
     ]
     
     constructor(widget_elem, config, tagID) {

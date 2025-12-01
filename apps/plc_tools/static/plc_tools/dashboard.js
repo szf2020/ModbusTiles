@@ -22,6 +22,7 @@ class Dashboard {
             tags: [],
             devices: [],
             tagOptions: [],
+            alarmOptions: [],
         }
 
         // Widget selection
@@ -206,13 +207,19 @@ class Dashboard {
 
                 case "number":
                     input = document.createElement('input');
-                    input.type = field.type === 'number' ? 'number' : 'text';
+                    input.type = 'number';
                     input.value = widget.config[field.name];
                     break;
 
                 case "text":
                     input = document.createElement('input');
-                    input.type = field.type === 'text';
+                    input.type = 'text';
+                    input.value = widget.config[field.name];
+                    break;
+
+                case "color":
+                    input = document.createElement('input');
+                    input.type = 'color';
                     input.value = widget.config[field.name];
                     break;
             }
@@ -297,7 +304,7 @@ class Dashboard {
         box.appendChild(deviceUI.wrapper);
 
         // Address
-        const addrUI = createInput("address", "Address (e.g. 40001)", "number", 0);
+        const addrUI = createInput("address", "Address", "number", 0);
         box.appendChild(addrUI.wrapper);
 
         // Channel Select
@@ -351,9 +358,93 @@ class Dashboard {
             if(result)
                 this.refreshData(); // Repopulate tag list
         };
-        
         box.appendChild(btn);
+
         this.inspectorForm.appendChild(box);
+
+        // --- Create Alarm Section ---
+        const box2 = document.createElement('p');
+        box2.style.border = "1px solid #ccc";
+        box2.style.padding = "10px";
+        box2.innerText = 'Create New Alarm';
+
+        // Alarm Name
+        const aliasUI2 = createInput("alias", "Alarm Name");
+        box2.appendChild(aliasUI2.wrapper);
+
+        // Alarm Tag Select
+        const tagsUI = createInput("tag", "Tag", "select");
+        this.cache.tags.forEach(tag => {
+            const opt = document.createElement('option');
+            opt.value = tag.external_id;
+            opt.text = `${tag.alias} [${tag.channel} ${tag.address}]`;
+            tagsUI.input.appendChild(opt);
+        });
+        box2.appendChild(tagsUI.wrapper);
+
+        // Threat Level Select
+        const threatLevelUI = createInput("threat_level", "Threat Level", "select");
+        this.cache.alarmOptions.threat_levels.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.value;
+            opt.innerText = d.label;
+            threatLevelUI.input.appendChild(opt);
+        });
+        box2.appendChild(threatLevelUI.wrapper);
+
+        // Trigger Value
+        const triggerValueUI = createInput("trigger_value", "Trigger Value", "text", 0); //TODO set type based on tag type?
+        box2.appendChild(triggerValueUI.wrapper);
+
+        // Message
+        const messageUI = createInput("message", "Message");
+        box2.appendChild(messageUI.wrapper);
+
+        // Submit Button
+        const btn2 = document.createElement('button');
+        btn2.innerText = "Save Alarm";
+        btn2.style.marginTop = "10px";
+        
+        btn2.onclick = async () => {
+            const tag = this.cache.tags.find(t => t.external_id === tagsUI.input.value);
+            let triggerValue = null;
+
+            if(tag) {
+                if(tag.data_type === "bool")
+                    triggerValue = ["true", "1", "yes", "on"].includes(triggerValueUI.input.value.trim().toLowerCase()); //TODO
+                else if(["int16", "uint16", "int32", "uint32", "int64"].includes(tag.data_type))
+                    triggerValue = parseInt(triggerValueUI.input.value);
+                else if(["float32", "float64"].includes(tag.data_type))
+                    triggerValue = parseFloat(triggerValueUI.input.value);
+                else
+                    triggerValue = triggerValueUI.input.value;
+
+                if(triggerValue == null || triggerValue == NaN) { //TODO more validation?
+                    alert("Invalid trigger value");
+                    return;
+                }
+            }
+            else {
+                alert("Couldn't get tag info");
+                return;
+            }
+
+            const payload = {
+                alias: aliasUI2.input.value,
+                tag: tagsUI.input.value,
+                threat_level: threatLevelUI.input.value,
+                trigger_value: triggerValue,
+                message: messageUI.input.value,
+            };
+            console.log(payload);
+
+            const result = await postServer('/api/alarms/', payload, "Alarm Created!");
+            //if(result)
+            //    this.refreshData(); // Repopulate alarm list
+        };
+        box2.appendChild(btn2);
+
+        this.inspectorForm.appendChild(box2);
 
         //
         const saveButton = document.createElement('button');
@@ -368,15 +459,17 @@ class Dashboard {
     async refreshData() {
         try {
             // Fetch Tags and Devices in parallel
-            const [tagsResp, devicesResp, tagOptions] = await Promise.all([
+            const [tagsResp, devicesResp, tagOptions, alarmOptions] = await Promise.all([
                 fetch('/api/tags/'),
                 fetch('/api/devices/'),
-                fetch('/api/tag-options/')
+                fetch('/api/tag-options/'),
+                fetch('/api/alarm-options/')
             ]);
 
             this.cache.tags = await tagsResp.json();
             this.cache.devices = await devicesResp.json();
             this.cache.tagOptions = await tagOptions.json();
+            this.cache.alarmOptions = await alarmOptions.json();
             console.log("Data loaded:", this.cache);
         } 
         catch (err) {

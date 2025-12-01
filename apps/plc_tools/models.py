@@ -200,7 +200,7 @@ class AlarmConfig(models.Model):
     threat_level = models.CharField(choices=ThreatLevelChoices.choices) #TODO textField?
     
     # Notification rules
-    notification_cooldown = models.DurationField(default=timedelta(minutes=1), help_text="Don't resend email for this long")
+    notification_cooldown = models.DurationField(default=timedelta(minutes=1), help_text="Don't resend email for this long") #TODO should this be part of subscription instead?
     last_notified = models.DateTimeField(null=True, blank=True)
 
     def get_activation(self):

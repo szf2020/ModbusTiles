@@ -157,6 +157,22 @@ class AlarmConfigDropdownSerializer(serializers.ModelSerializer):
         fields = ["alias", "threat_level"]
 
 
+class AlarmConfigCreateSerializer(serializers.ModelSerializer):
+    tag = serializers.SlugRelatedField(
+        slug_field='external_id', 
+        queryset=Tag.objects.all()
+    )
+    class Meta:
+        model = AlarmConfig
+        fields = [
+            "alias",
+            "tag",
+            "threat_level",
+            "trigger_value",
+            "message",
+        ]
+
+
 class AlarmConfigUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AlarmConfig
