@@ -129,7 +129,7 @@ class Tag(models.Model):
 
     def _prune_history(self):
         """ Keep history within limits """
-        if self.max_history_entries is None or self.max_history_entries < 0:
+        if self.max_history_entries < 0:
             return
 
         ids_to_keep = (
@@ -191,6 +191,7 @@ class AlarmConfig(models.Model):
 
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name="alarm_configs")
     trigger_value = models.JSONField(help_text="Value that triggers this alarm")
+    #trigger_sustain = models.DurationField(default=timedelta(seconds=3))
     owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     enabled = models.BooleanField(default=True)
     
@@ -239,7 +240,7 @@ class AlarmConfig(models.Model):
             if(activated):
                 activated.handle_notifications()
 
-    class Meta:
+    class Meta: #TODO shouldn't we prevent multiple alarms for the same value?
         unique_together = ("alias", "tag")
 
     def __str__(self):
@@ -277,7 +278,7 @@ class ActivatedAlarm(models.Model):
                     email_enabled=True
                 ).select_related('user')
         
-        recipients = [sub.user.email for sub in subs if sub.user.email]
+        recipients = [sub.user.email for sub in subs if sub.user.email] #TODO maybe return this and handle messaging elsewhere?
         print(f"Sending Email to {recipients}: {self.config.message}") #TODO logging?
 
         self.config.last_notified = timezone.now()

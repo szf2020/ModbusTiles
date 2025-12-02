@@ -1,7 +1,9 @@
 import { WidgetRegistry } from "./widgets.js";
 import { TagPoller } from "./tag_poller.js";
 import { GridStack } from 'https://cdn.jsdelivr.net/npm/gridstack@12.3.3/+esm'
-import { getCookie, postServer } from "./util.js";
+import { postServer } from "./util.js";
+import { refreshData } from "./global.js";
+import { Inspector } from "./inspector.js";
 
 class Dashboard {
     constructor() {
@@ -14,16 +16,10 @@ class Dashboard {
             this.toggleEdit();
         });
         this.creatorItems = document.getElementById('palette');
-        this.inspectorForm = document.getElementById('inspector-form');
         this.inspectButton = document.getElementById('inspect-button');
         this.alias = document.getElementById('dashboard-container').dataset.alias;
         this.poller = new TagPoller();
-        this.cache = {
-            tags: [],
-            devices: [],
-            tagOptions: [],
-            alarmOptions: [],
-        }
+        this.inspector = new Inspector();
 
         // Widget selection
         this.widgetGrid.addEventListener('click', (e) => {
@@ -37,7 +33,7 @@ class Dashboard {
                     this.selectWidget(widgetEl);
                 }
             }
-            else {
+            else if(this.selectedWidget) {
                 this.selectWidget(null);
             }
         });
@@ -115,7 +111,7 @@ class Dashboard {
 
         this.editButton.classList.add('hidden');
         
-        await this.refreshData();
+        await refreshData();
         this.selectWidget(null);
     }
 
@@ -127,355 +123,20 @@ class Dashboard {
                 return;
             }
         }
-            
+        
         this.selectedWidget = widgetElem;
-        this.inspectorForm.innerHTML = ''; // Clear previous
+        //this.inspectorForm.innerHTML = ''; // Clear previous
 
-        if (!widgetElem) {
-            this.inspectGlobal();
-            return;
+        if(widgetElem) {
+            widgetElem.classList.add("selected")
+            this.inspector.inspectWidget(widgetElem.widgetInstance);
+            activateTab(this.inspectButton);
         }
-        const widget = widgetElem.widgetInstance;
-
-        activateTab(this.inspectButton);
-        widgetElem.classList.add("selected");
-
-        // Add title
-        const title = document.createElement('p');
-        title.innerText = widget.constructor.displayName;
-        title.className = "inspector-title";
-        this.inspectorForm.appendChild(title);
-
-        // Add fields
-        
-        const allFields = [
-            ...widget.constructor.defaultFields, 
-            ...widget.constructor.customFields
-        ];
-
-        allFields.forEach(field => {
-            const wrapper = document.createElement('div');
-            wrapper.className = "input-group";
-
-            const label = document.createElement('label');
-            label.innerText = field.label;
-            label.className = "inspector-label";
-
-            let input;
-            
-
-            // Factory for input types
-            switch(field.type) {
-                case "tag_picker":
-                    input = document.createElement('select');
-                    
-                    // Add null option
-                    const defaultOpt = document.createElement('option');
-                    defaultOpt.value = "";
-                    defaultOpt.text = "-- Select Tag --";
-                    input.appendChild(defaultOpt);
-
-                    // Add compatible tags
-                    
-                    const allowedTypes = widget.constructor.allowedTypes;
-                    const allowedChannels = widget.constructor.allowedChannels;
-
-                    const compatibleTags = this.cache.tags.filter(tag => {
-                        const typeOk = allowedTypes.includes(tag.data_type);
-                        const channelOk = allowedChannels.includes(tag.channel);
-                        return typeOk && channelOk;
-                    });
-
-                    compatibleTags.forEach(tag => {
-                        const opt = document.createElement('option');
-                        opt.value = tag.external_id; // Using UUID
-                        // Show useful info in the dropdown
-                        opt.text = `${tag.alias} [${tag.channel} ${tag.address}]`;
-                        
-                        if (widget.tag === tag.external_id) {
-                            opt.selected = true;
-                        }
-                        input.appendChild(opt);
-                    });
-                    break;
-
-                case "bool":
-                    input = document.createElement('input');
-                    input.type = 'checkbox';
-                    input.checked = widget.config[field.name];
-                    break;
-
-                case "number":
-                    input = document.createElement('input');
-                    input.type = 'number';
-                    input.value = widget.config[field.name];
-                    break;
-
-                case "text":
-                    input = document.createElement('input');
-                    input.type = 'text';
-                    input.value = widget.config[field.name];
-                    break;
-
-                case "color":
-                    input = document.createElement('input');
-                    input.type = 'color';
-                    input.value = widget.config[field.name];
-                    break;
-            }
-
-            if(!input) {
-                console.warn("Unknown input for ", field.type);
-                return;
-            }
-            input.className = "inspector-input";
-                
-            // Live Update Logic
-            input.addEventListener('change', (e) => { //TODO don't really like these condintionals
-                // We could just send the update by removing tagid from the config and adding it to the request but that's icky
-                const val = field.type === 'bool' ? e.target.checked : e.target.value;
-                if(field.type === "tag_picker")
-                    widget.tag = val;
-                else
-                    widget.config[field.name] = val;
-                    
-                widget.applyConfig();
-
-                //TODO mark as dirty for prompting when closing page?
-            });
-            
-            label.appendChild(input);
-            wrapper.appendChild(label);
-            this.inspectorForm.appendChild(wrapper);
-        });
-    }
-
-    inspectGlobal() {
-        activateTab(this.inspectButton);
-
-        this.inspectorForm.innerHTML = '';
-        
-        const title = document.createElement('p');
-        title.innerText = "Dashboard Settings";
-        title.className = "inspector-title";
-        this.inspectorForm.appendChild(title);
-
-        // --- Create Tag Section ---
-        const box = document.createElement('p');
-        box.style.border = "1px solid #ccc";
-        box.style.padding = "10px";
-        box.innerText = 'Create New Tag';
-        
-        // Simple helper to create inputs
-        const createInput = (name, label, type="text", value) => { //TODO default value
-            const wrapper = document.createElement('div');
-            wrapper.className = "input-group";
-
-            const labelElem = document.createElement('label');
-            labelElem.innerText = label;
-            labelElem.className = "inspector-label";
-
-            const input = document.createElement(type === 'select' ? 'select' : 'input');
-            if(type !== 'select') input.type = type;
-            input.name = name;
-            input.className = "inspector-input";
-
-            input.value = value !== undefined ? value : "";
-
-            wrapper.appendChild(labelElem);
-            labelElem.appendChild(input);
-            return { wrapper, input };
-        };
-
-        // Alias
-        const aliasUI = createInput("alias", "Tag Name");
-        box.appendChild(aliasUI.wrapper);
-
-        //TODO description
-
-        // Device Select
-        const deviceUI = createInput("device", "Device", "select");
-        this.cache.devices.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.alias;
-            opt.innerText = d.alias;
-            deviceUI.input.appendChild(opt);
-        });
-        box.appendChild(deviceUI.wrapper);
-
-        // Address
-        const addrUI = createInput("address", "Address", "number", 0);
-        box.appendChild(addrUI.wrapper);
-
-        // Channel Select
-        const channelUI = createInput("channel", "Channel", "select");
-        this.cache.tagOptions.channels.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.value;
-            opt.innerText = d.label;
-            channelUI.input.appendChild(opt);
-        });
-        box.appendChild(channelUI.wrapper);
-
-        // Data Type Select
-        const dataTypeUI = createInput("datatype", "Data Type", "select"); //TODO remove channel-incompatible data types from list?
-        this.cache.tagOptions.data_types.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.value;
-            opt.innerText = d.label;
-            dataTypeUI.input.appendChild(opt);
-        });
-        box.appendChild(dataTypeUI.wrapper);
-
-        // Read Amount
-        const readAmountUI = createInput("read", "Read Amount", "number", 1);
-        box.appendChild(readAmountUI.wrapper);
-
-        // Max History Entries
-        const maxHistoryUI = createInput("history", "Max History", "number", 0);
-        box.appendChild(maxHistoryUI.wrapper);
-
-        // Submit Button
-        const btn = document.createElement('button');
-        btn.innerText = "Save Tag";
-        //btn.className = "btn-primary";
-        btn.style.marginTop = "10px";
-        
-        btn.onclick = async () => {
-            const payload = {
-                alias: aliasUI.input.value,
-                device: deviceUI.input.value,
-                address: parseInt(addrUI.input.value),
-                channel: channelUI.input.value,
-                data_type: dataTypeUI.input.value, 
-                unit_id: 1,
-                read_amount: parseInt(readAmountUI.input.value),
-                max_history_entries: parseInt(maxHistoryUI.input.value),
-                is_active: true
-            };
-
-            const result = await postServer('/api/tags/', payload, "Tag Created!");
-            if(result)
-                this.refreshData(); // Repopulate tag list
-        };
-        box.appendChild(btn);
-
-        this.inspectorForm.appendChild(box);
-
-        // --- Create Alarm Section ---
-        const box2 = document.createElement('p');
-        box2.style.border = "1px solid #ccc";
-        box2.style.padding = "10px";
-        box2.innerText = 'Create New Alarm';
-
-        // Alarm Name
-        const aliasUI2 = createInput("alias", "Alarm Name");
-        box2.appendChild(aliasUI2.wrapper);
-
-        // Alarm Tag Select
-        const tagsUI = createInput("tag", "Tag", "select");
-        this.cache.tags.forEach(tag => {
-            const opt = document.createElement('option');
-            opt.value = tag.external_id;
-            opt.text = `${tag.alias} [${tag.channel} ${tag.address}]`;
-            tagsUI.input.appendChild(opt);
-        });
-        box2.appendChild(tagsUI.wrapper);
-
-        // Threat Level Select
-        const threatLevelUI = createInput("threat_level", "Threat Level", "select");
-        this.cache.alarmOptions.threat_levels.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.value;
-            opt.innerText = d.label;
-            threatLevelUI.input.appendChild(opt);
-        });
-        box2.appendChild(threatLevelUI.wrapper);
-
-        // Trigger Value
-        const triggerValueUI = createInput("trigger_value", "Trigger Value", "text", 0); //TODO set type based on tag type?
-        box2.appendChild(triggerValueUI.wrapper);
-
-        // Message
-        const messageUI = createInput("message", "Message");
-        box2.appendChild(messageUI.wrapper);
-
-        // Submit Button
-        const btn2 = document.createElement('button');
-        btn2.innerText = "Save Alarm";
-        btn2.style.marginTop = "10px";
-        
-        btn2.onclick = async () => {
-            const tag = this.cache.tags.find(t => t.external_id === tagsUI.input.value);
-            let triggerValue = null;
-
-            if(tag) {
-                if(tag.data_type === "bool")
-                    triggerValue = ["true", "1", "yes", "on"].includes(triggerValueUI.input.value.trim().toLowerCase()); //TODO
-                else if(["int16", "uint16", "int32", "uint32", "int64"].includes(tag.data_type))
-                    triggerValue = parseInt(triggerValueUI.input.value);
-                else if(["float32", "float64"].includes(tag.data_type))
-                    triggerValue = parseFloat(triggerValueUI.input.value);
-                else
-                    triggerValue = triggerValueUI.input.value;
-
-                if(triggerValue == null || triggerValue == NaN) { //TODO more validation?
-                    alert("Invalid trigger value");
-                    return;
-                }
-            }
-            else {
-                alert("Couldn't get tag info");
-                return;
-            }
-
-            const payload = {
-                alias: aliasUI2.input.value,
-                tag: tagsUI.input.value,
-                threat_level: threatLevelUI.input.value,
-                trigger_value: triggerValue,
-                message: messageUI.input.value,
-            };
-            console.log(payload);
-
-            const result = await postServer('/api/alarms/', payload, "Alarm Created!");
-            //if(result)
-            //    this.refreshData(); // Repopulate alarm list
-        };
-        box2.appendChild(btn2);
-
-        this.inspectorForm.appendChild(box2);
-
-        //
-        const saveButton = document.createElement('button');
-        saveButton.innerText = "Save Dashboard";
-        btn.style.marginTop = "10px";
-        saveButton.onclick = async () => {
-            this.save();
-        }
-        this.inspectorForm.appendChild(saveButton);
-    }
-
-    async refreshData() {
-        try {
-            // Fetch Tags and Devices in parallel
-            const [tagsResp, devicesResp, tagOptions, alarmOptions] = await Promise.all([
-                fetch('/api/tags/'),
-                fetch('/api/devices/'),
-                fetch('/api/tag-options/'),
-                fetch('/api/alarm-options/')
-            ]);
-
-            this.cache.tags = await tagsResp.json();
-            this.cache.devices = await devicesResp.json();
-            this.cache.tagOptions = await tagOptions.json();
-            this.cache.alarmOptions = await alarmOptions.json();
-            console.log("Data loaded:", this.cache);
-        } 
-        catch (err) {
-            console.error("Failed to load editor data", err);
-            alert("Could not load Tags/Devices"); //TODO show no connection banner, keep trying?
-            // would need to refactor logic for banner a bit
+        else {
+            this.inspector.inspectGlobal();
+            this.inspector.addButton("Save Dashboard", async () => {
+                this.save();
+            })
         }
     }
 

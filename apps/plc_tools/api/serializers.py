@@ -109,7 +109,10 @@ class TagValueSerializer(serializers.ModelSerializer):
         return obj.last_updated
 
     def get_age(self, obj):
-        return (timezone.now() - obj.last_updated).total_seconds() * 1000 #TODO just send the server time with the multi tag response?
+        if(obj.last_updated is None):
+            return "Infinity"
+        else:
+            return (timezone.now() - obj.last_updated).total_seconds() * 1000 #TODO just send the server time with the multi tag response?
 
     def get_alarm(self, obj): #TODO not sure if this should be the active alarm or the alarm config
         alarm_config = self.context.get("alarm_map", {}).get(obj.id)

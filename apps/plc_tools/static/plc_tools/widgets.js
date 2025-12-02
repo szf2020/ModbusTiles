@@ -9,7 +9,7 @@ class Widget {
         //{ name: "position_x", type: "number", default: 0, label: "Position Y" },
         //{ name: "scale_x", type: "number", default: 1, label: "Size X" },
         //{ name: "scale_y", type: "number", default: 1, label: "Size Y" },
-        { name: "tag", type: "tag_picker", default: null, label: "Control Tag"},
+        //{ name: "tag", type: "select", default: null, label: "Control Tag"},
     ]
     static customFields = [];
 
