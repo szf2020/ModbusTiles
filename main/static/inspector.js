@@ -232,9 +232,10 @@ export class Inspector {
                 is_active: true
             };
 
-            const result = await postServer('/api/tags/', payload, "Tag Created!");
-            if(result)
-                refreshData(); // Repopulate tag list
+            const ok = await postServer('/api/tags/', payload, () => {
+                alert("Tag Created!");
+                refreshData();
+            });
         };
         this.addButton("Create Tag", tagSubmit, tagSection);
     }
@@ -308,7 +309,9 @@ export class Inspector {
             }
             
             console.log("Submitting:", payload);
-            const result = await postServer('/api/alarms/', payload, "Alarm Created!");
+            const ok = await postServer('/api/alarms/', payload, () => {
+                alert("Alarm Created!");
+            });
         }
 
         this.addButton("Create Alarm", alarmSubmit, alarmSection);

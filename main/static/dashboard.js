@@ -76,6 +76,7 @@ class Dashboard {
         this.canvasGridStack = GridStack.init({
             staticGrid: true, 
             column: 20,
+            minRow: 5,
             cellHeight: '100',
             margin: 5,
             float: true,
@@ -274,12 +275,10 @@ class Dashboard {
         console.log("Saving...", widgetsPayload);
         
         // Send data to server
-        if(postServer( 
-            `/api/dashboards/${this.alias}/save-widgets/`, 
-            widgetsPayload, 
-            `Dashboard Saved!`
-        ))
+        postServer( `/api/dashboards/${this.alias}/save-widgets/`, widgetsPayload, () => {
+            alert("Dashboard Saved!");
             this.isDirty = false;
+        })
     }
 }
 

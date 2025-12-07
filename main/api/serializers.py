@@ -205,7 +205,7 @@ class ActivatedAlarmSerializer(serializers.ModelSerializer):
 class DashboardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dashboard
-        fields = "__all__"
+        fields = ["alias", "description"]
 
 
 class DashboardWidgetSerializer(serializers.ModelSerializer):

@@ -1,0 +1,29 @@
+
+{% load static %}
+<link rel="stylesheet" href="{% static 'styles.css' %}">
+<body>
+    <header class="app-header">
+        <div class="brand">
+            <h1>My Dashboards<span class="dashboard-alias">{{ user.username }}</span></h1>
+        </div>
+    </header>
+    <main class="app-layout">
+        <div class="dashboard-grid">
+            {% for db in dashboards %}
+            <a href="{% url 'dashboard' db.alias %}" class="dashboard-card">
+                <div class="preview-box">
+                    {% if db.preview_image %}
+                        <img src="{{ db.preview_image.url }}" alt="Preview">
+                    {% else %}
+                        <div class="placeholder">No Preview</div>
+                    {% endif %}
+                </div>
+                <h3 class="dashboard-title">{{ db.alias }}</h3>
+                <p>{{ db.description }}</p>
+            </a>
+            {% endfor %}
+            <button id="create-dashboard" class="btn">+ New Dashboard</button>
+        </div>
+    </main>
+</body>
+<script type="module" src="{% static 'dashboard_list.js' %}"></script>

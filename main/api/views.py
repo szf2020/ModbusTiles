@@ -149,6 +149,9 @@ class DashboardViewSet(ModelViewSet):
             raise ValidationError(f"Save failed: {str(e)}")
 
         return Response({"status": "saved", "count": len(new_widgets)})
+    
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
 
 class DashboardWidgetViewSet(ModelViewSet):

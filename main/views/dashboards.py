@@ -3,6 +3,22 @@ from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
 
+def dashboard_list(request):
+    from django.contrib.auth import login
+    from django.contrib.auth.models import User
+
+    #TODO remove test code
+    if not request.user.is_authenticated:
+        test_user = User.objects.get(username="testuser")
+        login(request, test_user)
+
+    
+    dashboards = Dashboard.objects.filter(owner=request.user)
+    return render(request, "dashboard_list.html", {
+        "dashboards": dashboards,
+        "user" : request.user
+    })
+
 #http://localhost:8000/dashboard/TestDashboard/
 #@login_required
 def dashboard_view(request, alias):

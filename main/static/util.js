@@ -14,7 +14,7 @@ export function getCookie(name) {
     return cookieValue;
 }
 
-export async function postServer(input, payload, successMessage) {
+export async function postServer(input, payload, successCallback) {
     try {
         const response = await fetch(input, {
             method: 'POST',
@@ -26,9 +26,7 @@ export async function postServer(input, payload, successMessage) {
         });
 
         if (response.ok) {
-            if(successMessage)
-                alert(successMessage);
-            return true;
+            successCallback();
         } 
         else {
             const err = await response.json();

@@ -309,6 +309,7 @@ class Dashboard(models.Model):
     alias = models.SlugField(max_length=100)
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
     description = models.TextField(blank=True)
+    preview_image = models.ImageField(upload_to='dashboard_previews/', null=True, blank=True)
     #external_id = models.UUIDField(default=uuid.uuid4, unique=True)
     #TODO permitted users?
     #created_at = models.DateTimeField(auto_now_add=True)
