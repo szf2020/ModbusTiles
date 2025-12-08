@@ -78,7 +78,7 @@ class Dashboard {
         this.canvasGridStack = GridStack.init({
             staticGrid: true, 
             column: 20,
-            minRow: 5,
+            minRow: 10,
             cellHeight: '100',
             margin: 5,
             float: true,

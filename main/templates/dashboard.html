@@ -8,13 +8,16 @@
 <body>
     <header class="app-header">
         <div class="brand">
-            <span class="logo-icon">🎛️</span>
-            <h1>Dashboard  <span class="dashboard-alias">{{ dashboard.alias }}</span></h1>
+            <h1>
+                <a href="{% url 'dashboards' %}" class="breadcrumb-link">Dashboards</a>
+                <span class="separator">/</span>
+                <span class="dashboard-alias">{{ dashboard.alias }}</span>
+            </h1>
         </div>
         <div class="header-controls">
             <div class="connection-status hidden" id="connection-banner">⚠️ Offline</div>
-            <button type="button" id="edit-button" class="btn btn-primary">Edit Dashboard</button>
-            <button type="button" id="save-button" class="btn btn-primary hidden">Save Dashboard</button>
+            <button type="button" id="edit-button" class="form-button">Edit Dashboard</button>
+            <button type="button" id="save-button" class="form-button hidden">Save Dashboard</button>
         </div>
     </header>
 

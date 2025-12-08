@@ -4,4 +4,5 @@ from .views import dashboards
 urlpatterns = [
     path("dashboard/<slug:alias>/", dashboards.dashboard_view, name="dashboard"),
     path("dashboards/", dashboards.dashboard_list, name="dashboards"),
+    path("", dashboards.home_view, name="home")
 ]

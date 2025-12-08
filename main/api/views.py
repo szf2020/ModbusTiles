@@ -4,7 +4,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.generics import ListAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.decorators import action
 from .serializers import TagDetailSerializer, TagDropdownSerializer, TagCreateSerializer, TagUpdateSerializer, TagValueSerializer, TagWriteRequestSerializer, TagHistoryEntrySerializer
@@ -24,6 +24,7 @@ class DeviceViewSet(ModelViewSet):
     serializers = {
         "list": DeviceDropdownSerializer,
     }
+    permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
         return self.serializers.get(self.action) or DeviceSerializer
@@ -37,7 +38,7 @@ class DeviceViewSet(ModelViewSet):
 
 class DeviceMetadataView(APIView):
     """ Returns the available choices for protocols and word orders """
-    #permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response({
@@ -59,6 +60,7 @@ class TagViewSet(ModelViewSet):
         "update": TagUpdateSerializer,
         "partial_update": TagUpdateSerializer,
     }
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = Tag.objects.all()
@@ -81,7 +83,7 @@ class TagViewSet(ModelViewSet):
 
 class TagMetadataView(APIView):
     """ Returns the available choices for Channels and Data Types """
-    #permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response({
@@ -97,7 +99,7 @@ class TagMetadataView(APIView):
 class TagWriteRequestViewSet(ModelViewSet):
     queryset = TagWriteRequest.objects.all()
     serializer_class = TagWriteRequestSerializer
-    #permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def update(self, request, *args, **kwargs):
         raise MethodNotAllowed("PUT/PATCH not allowed on TagWriteRequest")
@@ -112,6 +114,7 @@ class TagWriteRequestViewSet(ModelViewSet):
 class DashboardViewSet(ModelViewSet):
     lookup_field = 'alias' 
     serializer_class = DashboardSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         # Only see owned dashboards
@@ -128,18 +131,14 @@ class DashboardViewSet(ModelViewSet):
         """
         dashboard = self.get_object()
 
-        # 1. Handle Preview Image Upload
+        # Get preview image
         if 'preview_image' in request.FILES:
             dashboard.preview_image = request.FILES['preview_image']
-            # We save the dashboard immediately to persist the image file
             dashboard.save()
 
-        # 2. Extract Widgets Data
-        # When using FormData, the 'widgets' payload is a string we must parse.
+        # Get widget data
         raw_widgets = request.data.get('widgets')
         
-        # If no widgets were sent, we might just be updating the image, 
-        # but usually we expect widgets. 
         if not raw_widgets:
             return Response({"status": "saved", "widgets_count": 0})
         
@@ -148,11 +147,10 @@ class DashboardViewSet(ModelViewSet):
         except json.JSONDecodeError:
             raise ValidationError("Invalid JSON format in 'widgets' field")
 
-        # 3. Validate Widgets
         serializer = DashboardWidgetBulkSerializer(data=widgets_data, many=True)
         serializer.is_valid(raise_exception=True)
         
-        # 4. Save Widgets (Atomic Transaction)
+        # Save widgets
         try:
             with transaction.atomic():
                 # Wipe clean
@@ -199,6 +197,7 @@ class DashboardViewSet(ModelViewSet):
 class DashboardWidgetViewSet(ModelViewSet):
     serializer_class = DashboardWidgetSerializer
     max_count = 99
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         # Only see owned widgets
@@ -228,6 +227,7 @@ class AlarmConfigViewSet(ModelViewSet):
         "list": AlarmConfigDropdownSerializer,
         "create": AlarmConfigCreateSerializer,
     }
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = AlarmConfig.objects.all()
@@ -251,7 +251,7 @@ class AlarmConfigViewSet(ModelViewSet):
 
 class AlarmMetadataView(APIView):
     """ Returns the available choices alarm threat levels """
-    #permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response({
@@ -265,6 +265,8 @@ class AlarmMetadataView(APIView):
     
     
 class TagMultiValueView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         ids = request.query_params.get("tags", "").split(",")
         tags = list(Tag.objects.filter(external_id__in=ids))
@@ -280,6 +282,7 @@ class TagMultiValueView(APIView):
 
 class TagHistoryView(ListAPIView):
     serializer_class = TagHistoryEntrySerializer
+    permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
         qs = TagHistoryEntry.objects.all().order_by('timestamp')

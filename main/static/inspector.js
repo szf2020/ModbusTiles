@@ -13,14 +13,14 @@ export class Inspector {
     addTitle(text) {
         const title = document.createElement('p');
         title.innerText = text;
-        title.className = "inspector-title";
+        title.className = "form-title";
         this.container.appendChild(title);
         return title;
     }
 
     addSection(title) {
         const box = document.createElement('div');
-        box.className = "inspector-box";
+        box.className = "form-box";
         box.innerText = title ? title : "";
         this.container.appendChild(box);
         return box;
@@ -29,7 +29,7 @@ export class Inspector {
     addButton(title, callback, section) {
         const btn = document.createElement('button');
         btn.innerText = title ? title : "";
-        btn.classList.add("btn");
+        btn.classList.add("form-button");
         btn.onclick = callback;
         if(!section)
             section = this.container;
@@ -42,7 +42,7 @@ export class Inspector {
 
         const label = document.createElement('label');
         label.innerText = def.label || def.name;
-        label.className = "inspector-label";
+        label.className = "form-label";
 
         let input = null;
 
@@ -52,7 +52,7 @@ export class Inspector {
             input = document.createElement("input");
             input.value = currentValue;
         }
-        input.classList.add("inspector-input");
+        input.classList.add("form-input");
 
         // Function used to get this field's current value
         let getValue = () => {return null};

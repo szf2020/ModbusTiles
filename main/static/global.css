@@ -50,7 +50,20 @@ body {
 
 .header-controls { display: flex; align-items: center; gap: 15px; }
 
-.btn {
+.breadcrumb-link {
+    text-decoration: none;
+    color: white; /* Muted color to show it's a parent */
+}
+.breadcrumb-link:hover {
+    color: white; /* Brighten on hover */
+    text-decoration: underline;
+}
+.separator {
+    margin: 0 8px;
+    color: #4a5568;
+}
+
+.form-button {
     padding: 8px 16px;
     border: none;
     border-radius: 4px;
@@ -58,8 +71,62 @@ body {
     font-weight: 600;
     transition: background 0.2s;
 }
-.btn-primary { background: var(--primary-color); color: white; }
-.btn-primary:hover { background: #004494; }
+.form-button-primary { background: var(--primary-color); color: white; }
+.form-button-primary:hover { background: #004494; }
+
+.form-box {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+.form-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin: 10px 0 10px 0;
+    font-weight: 700;
+}
+.form-group { margin-bottom: 12px; }
+.form-label {
+    display: block;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    color: var(--text-main);
+}
+.form-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    margin-top: 2px;
+}
+.form-input.bool { width: auto; flex: 0 0 auto; margin-left: auto; }
+.form-label.bool { display: flex; align-items: center; width: 100%; }
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 86, 179, 0.1);
+}
+
+.form-body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    padding-bottom: 4%;
+  
+}
+
+.user-form {
+    width: 300px; 
+    height: 200px; 
+    padding: 16px;
+    /* background-color: white; */
+    border-radius: 8px;
+}
 
 /* --- UTILITIES --- */
 .hidden { display: none !important; }

@@ -6,7 +6,16 @@
 <body>
     <header class="app-header">
         <div class="brand">
-            <h1>My Dashboards<span class="dashboard-alias">  {{ user.username }}</span></h1>
+            <h1>Dashboards
+                <span class="separator">/</span>
+                <span class="dashboard-alias">{{ user.username }}</span>
+            </h1>
+        </div>
+        <div class="header-controls">
+            <form method="post" action="{% url 'logout' %}" style="margin: 0 auto;">
+                {% csrf_token %}
+                <button type="submit" class="form-button">Log Out</button>
+            </form>
         </div>
     </header>
     <main class="app-layout">
