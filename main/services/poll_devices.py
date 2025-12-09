@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 channel_layer = get_channel_layer()
 clients: dict[str, ModbusBaseClient] = {}
-
+updates = {}
 
 async def poll_devices():
     """ Gather tag data and process write requests at a steady rate """
@@ -36,14 +36,22 @@ async def poll_devices():
     while True:
         start_time = time.monotonic()
         devices = await get_active_devices()
+        updates.clear()
         
         # Process devices concurrently
         tasks = [_poll_device(d) for d in devices]
         await asyncio.gather(*tasks)
 
+        await channel_layer.group_send(
+            "poller_broadcast", {
+                "type": "tag_update",
+                "updates": updates.copy()
+            }
+        )
+
         # Sleep
         elapsed = time.monotonic() - start_time
-        sleep_time = max(0, 0.5 - elapsed) # Target 0.5s interval
+        sleep_time = max(0, 0.25 - elapsed)
         await asyncio.sleep(sleep_time)
 
 
@@ -85,7 +93,7 @@ async def _get_client(device: Device) -> ModbusBaseClient | None:
                 conn = AsyncModbusUdpClient(device.ip_address, port=device.port)
             #case Device.ProtocolChoices.MODBUS_RTU:
             #    conn = ModbusSerialClient(device.port)
-        if await conn.connect():
+        if await conn.connect(): #TODO only retry after set duration?
             logger.info(f"Established connection: {conn}")
         else:
             raise ConnectionError("Could not connect to PLC", conn)
@@ -167,33 +175,41 @@ async def _process_block(block: ReadBlock, client: ModbusBaseClient):
 
     # For each tag, get the associated value found in the register data 
     for tag in block.tags:
-        try:
+        #try:
             # Get memory
-            offset = tag.address - block.start
-            length = tag.get_read_count() #TODO
+        offset = tag.address - block.start
+        length = tag.get_read_count() #TODO
 
-            if offset + length > len(block_data):
-                logger.warning(f"Tag {tag} out of bounds in block read")
-                continue
-            
-            raw_slice = block_data[offset : offset + length]
+        if offset + length > len(block_data):
+            logger.warning(f"Tag {tag} out of bounds in block read")
+            continue
+        
+        raw_slice = block_data[offset : offset + length]
 
-            # Convert the register data into typed value
-            if len(rr.registers) > 0:
-                values = client.convert_from_registers(
-                    raw_slice, 
-                    data_type=_get_modbus_datatype(client, tag),
-                    word_order=tag.device.word_order
-                )
-            elif len(rr.bits) > 0:
-                values = raw_slice if tag.read_amount > 1 else raw_slice[0]
+        # Convert the register data into typed value
+        if len(rr.registers) > 0:
+            values = client.convert_from_registers(
+                raw_slice, 
+                data_type=_get_modbus_datatype(client, tag),
+                word_order=tag.device.word_order
+            )
+        elif len(rr.bits) > 0:
+            values = raw_slice if tag.read_amount > 1 else raw_slice[0]
 
-            # Update tag
-            tag.current_value = values #TODO
-            tag.last_updated = timezone.now()
+        # Update tag
+        if tag.current_value != values:
+            updates[tag.external_id] = { #TODO tag method?
+                "value": values,
+                "time" : str(timezone.now()), #TODO does this work?
+                "alarm" : None, #TODO
+                "age" : 0, #TODO
+            }
 
-        except Exception as e:
-            logger.error(f"Error processing tag {tag.alias}: {e}")
+        tag.current_value = values #TODO
+        tag.last_updated = timezone.now()
+
+        #except Exception as e:
+        #    logger.error(f"Error processing tag {tag.alias}: {e}")
 
 
 async def _process_writes(client, device):
@@ -204,7 +220,7 @@ async def _process_writes(client, device):
         return list(
             TagWriteRequest.objects
             .filter(processed=False, tag__device=device)
-            .select_related("tag")
+            .select_related("tag__device")
         )
     
     @sync_to_async

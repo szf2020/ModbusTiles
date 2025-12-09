@@ -1,5 +1,5 @@
 import { WidgetRegistry } from "./widgets.js";
-import { TagPoller } from "./tag_poller.js";
+import { TagListener } from "./tag_listener.js";
 import { GridStack } from 'https://cdn.jsdelivr.net/npm/gridstack@12.3.3/+esm'
 import { postServer } from "./util.js";
 import { refreshData } from "./global.js";
@@ -19,7 +19,7 @@ class Dashboard {
         this.inspectButton = document.getElementById('inspect-button');
         this.alias = document.getElementById('dashboard-container').dataset.alias; // Set by Django
 
-        this.poller = new TagPoller();
+        this.listener = new TagListener();
         this.inspector = new Inspector();
 
         // Widget selection
@@ -165,20 +165,20 @@ class Dashboard {
         }
 
         this.canvasGridStack.removeAll();
-        this.poller.clear();
+        this.listener.clear();
 
         console.log("Widgets:", widgetData);
 
-        // Add widgets to the gridstack grid and poller
+        // Add widgets to the gridstack grid and listener
         if(widgetData.length === 0) {
             this.toggleEdit();
         }
         else {
             widgetData.forEach(wData => {
                 const widget = this.createWidget(wData.widget_type, wData.tag, wData.config);
-                this.poller.registerWidget(widget);
+                this.listener.registerWidget(widget);
             });
-            this.poller.start();
+            this.listener.connect();
         }
     }
 
@@ -207,7 +207,7 @@ class Dashboard {
             clearInterval(interval);
         }, 500);
 
-        this.poller.clear();
+        this.listener.clear();
         
         this.selectWidget(null);
     }
@@ -261,7 +261,7 @@ class Dashboard {
         this.canvasGridStack.setStatic(true); 
         this.widgetGrid.style.width = `${CAPTURE_WIDTH}px`;
         this.widgetGrid.style.height = `${CAPTURE_HEIGHT}px`;
-        this.widgetGrid.style.overflow = 'hidden'; // CUTS OFF any rows below the fold
+        this.widgetGrid.style.overflow = 'hidden';
         this.updateSquareCells(); 
         //this.canvasGridStack.onResize();
 

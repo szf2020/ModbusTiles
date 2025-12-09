@@ -13,13 +13,11 @@ class Command(BaseCommand):
             print("Test objects already set up; reset the DB first")
             return
 
-        user = User.objects.create(
+        user = User.objects.create_superuser(
             username="testuser",
             email="test@example.com",
-            is_staff=True,
+            password="test1234",
         )
-        user.set_password("test1234")
-        user.save()
 
         dashboard = Dashboard.objects.create(
             owner=user,
