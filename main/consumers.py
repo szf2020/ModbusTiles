@@ -14,8 +14,6 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         )
         await self.accept()
 
-        print("Consumer channel layer:", id(self.channel_layer))
-
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
             self.group_name,

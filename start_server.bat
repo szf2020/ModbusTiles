@@ -8,7 +8,7 @@ call .venv\Scripts\activate
 REM ---------- Start Simulator ----------
 echo.
 echo *** STARTING PLC SIMULATOR ***
-start cmd /k "call .venv\Scripts\activate && python sim/start_plc.py"
+start cmd /k "call .venv\Scripts\activate && python manage.py run_test_device"
 
 REM ---------- Collect Statics ----------
 echo.

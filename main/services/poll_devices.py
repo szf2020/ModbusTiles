@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from collections import defaultdict
 from django.utils import timezone
+from django.db import connection, close_old_connections
 from asgiref.sync import sync_to_async
 from pymodbus.client import AsyncModbusTcpClient, AsyncModbusUdpClient
 from pymodbus.client.base import ModbusBaseClient
@@ -30,11 +31,18 @@ async def poll_devices():
     def get_active_devices() -> list[Device]:
         """ Get devices enabled in the DB with prefetched tags """
         return list(Device.objects.filter(is_active=True).prefetch_related('tags'))
+    
+    @sync_to_async
+    def close_loop_connections():
+        """ Closes old connections in the sync thread to prevent staleness """
+        close_old_connections()
 
     logger.info("Starting Async Poller...")
     
     while True:
         start_time = time.monotonic()
+        await close_loop_connections()
+
         devices = await get_active_devices()
         updates.clear()
         
@@ -62,6 +70,7 @@ async def _poll_device(device: Device):
     def bulk_save_tags(tags):
         # Only update the tags that actually changed
         #dirty_tags = [t for t in tags if t.tracker.has_changed('current_value')] if hasattr(tags[0], 'tracker') else tags
+        connection.ensure_connection()
         Tag.objects.bulk_update(tags, ['current_value', 'last_updated'])
 
     try:
@@ -175,41 +184,43 @@ async def _process_block(block: ReadBlock, client: ModbusBaseClient):
 
     # For each tag, get the associated value found in the register data 
     for tag in block.tags:
-        #try:
+        try:
             # Get memory
-        offset = tag.address - block.start
-        length = tag.get_read_count() #TODO
+            offset = tag.address - block.start
+            length = tag.get_read_count() #TODO
 
-        if offset + length > len(block_data):
-            logger.warning(f"Tag {tag} out of bounds in block read")
-            continue
-        
-        raw_slice = block_data[offset : offset + length]
+            if offset + length > len(block_data):
+                logger.warning(f"Tag {tag} out of bounds in block read")
+                continue
+            
+            raw_slice = block_data[offset : offset + length]
 
-        # Convert the register data into typed value
-        if len(rr.registers) > 0:
-            values = client.convert_from_registers(
-                raw_slice, 
-                data_type=_get_modbus_datatype(client, tag),
-                word_order=tag.device.word_order
-            )
-        elif len(rr.bits) > 0:
-            values = raw_slice if tag.read_amount > 1 else raw_slice[0]
+            # Convert the register data into typed value
+            if len(rr.registers) > 0:
+                values = client.convert_from_registers(
+                    raw_slice, 
+                    data_type=_get_modbus_datatype(client, tag),
+                    word_order=tag.device.word_order
+                )
+            elif len(rr.bits) > 0:
+                values = raw_slice if tag.read_amount > 1 else raw_slice[0]
 
-        # Update tag
-        if tag.current_value != values:
-            updates[tag.external_id] = { #TODO tag method?
-                "value": values,
-                "time" : str(timezone.now()), #TODO does this work?
-                "alarm" : None, #TODO
-                "age" : 0, #TODO
-            }
+            # Update tag
+            if tag.current_value != values:
+                updates[tag.external_id] = { #TODO tag method?
+                    "value": values,
+                    "time" : str(timezone.now()), #TODO does this work?
+                    "alarm" : None, #TODO
+                    "age" : 0, #TODO
+                }
 
-        tag.current_value = values #TODO
-        tag.last_updated = timezone.now()
+            tag.current_value = values #TODO
+            tag.last_updated = timezone.now()
 
-        #except Exception as e:
-        #    logger.error(f"Error processing tag {tag.alias}: {e}")
+            #TODO need to bring back history entries
+
+        except Exception as e:
+            logger.error(f"Error processing tag {tag.alias}: {e}")
 
 
 async def _process_writes(client, device):

@@ -12,17 +12,13 @@ class Widget {
     static customFields = [];
 
     constructor(gridElem, config, tagID) { // unsure if the tagID should be part of config or not
-        if(config) {
-            this.config = config;
-        }
-        else {
-            // Create default config
-            this.config = {};
-            const allFields = [...(new.target.defaultFields), ...(new.target.customFields)];
-            allFields.forEach(field => {
-                this.config[field.name] = field.default;
-            });
-        }
+        // Apply defaults
+        const allFields = [...(new.target.defaultFields), ...(new.target.customFields)];
+        allFields.forEach(field => {
+            if(config[field.name] === undefined)
+                config[field.name] = field.default;
+        });
+        this.config = config;
 
         this.tag = tagID;
         this.elem = gridElem.querySelector('.dashboard-widget');
@@ -47,7 +43,6 @@ class Widget {
             return;
         }
 
-        console.log("Submitting", value)
         this.shouldUpdate = false;
         clearTimeout(this.timeoutID);
 
@@ -64,7 +59,7 @@ class Widget {
         });
 
         const result = await response.json();
-        console.log(result)
+
         if (result.error) {
             alert("Failed to write value: " + result.error);
         }
@@ -134,7 +129,6 @@ class Widget {
                 this.label.textContent = tag.alias;
                 this.label.title = tag.description;
             }
-                
         }
         else {
             this.label.classList.add("hidden");
@@ -371,8 +365,8 @@ class ChartWidget extends Widget {
         this.chartDiv = this.elem.querySelector(".chart-container");
         this.showAlarm = false;
 
-        this.historyDurationSeconds = this.config.history_seconds || 60;
-        this.maxPoints = this.config.max_points || 1000;
+        this.historyDurationSeconds = this.config.history_seconds;
+        //this.maxPoints = this.config.max_points || 1000;
     }
 
     async initChart() {
@@ -384,6 +378,8 @@ class ChartWidget extends Widget {
             
             const timestamps = data.map(e => e.timestamp);
             const values = data.map(e => e.value);
+
+            console.log("Got", values.length, "values from history");
 
             // Data trace
             const trace = {

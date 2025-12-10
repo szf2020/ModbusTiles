@@ -296,6 +296,8 @@ class TagHistoryView(ListAPIView):
         # Filter by Time
         seconds = int(self.request.query_params.get('seconds', 60))
         cutoff = timezone.now() - timedelta(seconds=seconds)
+        print(cutoff)
         qs = qs.filter(timestamp__gte=cutoff)
+        print(qs)
         
         return qs

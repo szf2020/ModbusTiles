@@ -6,6 +6,8 @@ User = get_user_model()
 
 class Command(BaseCommand):
     def handle(self, *args, **options):
+        # ---------- Basics ----------
+
         device, created = Device.objects.get_or_create(
             alias="TestPLC"
         )
@@ -24,9 +26,70 @@ class Command(BaseCommand):
             alias="TestDashboard",
         )
 
+        # ---------- Tags ----------
+
+        coil_tags = []
+        di_tags = []
+        hr_tags = []
+        ir_tags = []
+
+        for i in range(0, 16, 2):
+            coil_tags.append(Tag(
+                device=device,
+                alias=f"coil {i}",
+                channel=Tag.ChannelChoices.COIL,
+                data_type=Tag.DataTypeChoices.BOOL,
+                address=i,
+                description="A test coil tag",
+            ))
+
+        for i in range(0, 8):
+            di_tags.append(Tag(
+                device=device,
+                alias=f"di {i}",
+                channel=Tag.ChannelChoices.DISCRETE_INPUT,
+                data_type=Tag.DataTypeChoices.BOOL,
+                address=i,
+                description="A test discrete input tag",
+            ))
+
+        for i in range(0, 8, 2):
+            hr_tags.append(Tag(
+                device=device,
+                alias=f"hr float {i}",
+                channel=Tag.ChannelChoices.HOLDING_REGISTER,
+                data_type=Tag.DataTypeChoices.FLOAT32,
+                address=i,
+                description="A test holding register tag",
+            ))
+
+        for i in range(0, 4):
+            ir_tags.append(Tag(
+                device=device,
+                alias=f"ir int {i}",
+                channel=Tag.ChannelChoices.INPUT_REGISTER,
+                data_type=Tag.DataTypeChoices.UINT16,
+                address=i,
+                description="A test input register tag",
+            ))
+
+        chart_tag = Tag(
+            device=device,
+            alias=f"chart tag",
+            channel=Tag.ChannelChoices.INPUT_REGISTER,
+            data_type=Tag.DataTypeChoices.FLOAT32,
+            max_history_entries=128,
+            address=32,
+            description="A float tag for testing the chart",
+        )
+
+        Tag.objects.bulk_create(coil_tags + di_tags + hr_tags + ir_tags + [chart_tag])
+
         # ---------- Test Coils ----------
 
-        widget = DashboardWidget.objects.create(
+        widgets = []
+
+        widgets.append(DashboardWidget(
             dashboard=dashboard,
             widget_type=DashboardWidget.WidgetTypeChoices.LABEL,
             config = {
@@ -36,98 +99,195 @@ class Command(BaseCommand):
                 "scale_y" : 1,
                 "text" : "Test Coils",
             }
-        )
+        ))
 
-        tag = Tag.objects.create(
-            device=device,
-            alias="Test Coil",
-            description="PLC coil 0",
-            channel=Tag.ChannelChoices.COIL,
-            data_type=Tag.DataTypeChoices.BOOL,
-            address=0,
-        )
+        for i in range(len(coil_tags)):
+            widgets.append(DashboardWidget(
+                dashboard=dashboard,
+                tag=coil_tags[i],
+                widget_type=DashboardWidget.WidgetTypeChoices.LED,
+                config = {
+                    "position_x": i,
+                    "position_y": 1,
+                    "scale_x" : 1,
+                    "scale_y" : 1,
+                    "color_on": "green",
+                    "color_off": "red",
+                }
+            ))
+            widgets.append(DashboardWidget(
+                dashboard=dashboard,
+                tag=coil_tags[i],
+                widget_type=DashboardWidget.WidgetTypeChoices.BOOL_LABEL,
+                config = {
+                    "position_x": i,
+                    "position_y": 2,
+                    "scale_x" : 1,
+                    "scale_y" : 1,
+                    "text_on": "On",
+                    "text_off": "Off",
+                }
+            ))
+            widgets.append(DashboardWidget(
+                dashboard=dashboard,
+                tag=coil_tags[i],
+                widget_type=DashboardWidget.WidgetTypeChoices.SWITCH,
+                config = {
+                    "position_x": i,
+                    "position_y": 3,
+                    "scale_x" : 1,
+                    "scale_y" : 1,
+                }
+            ))
 
-        widget = DashboardWidget.objects.create(
+        # ---------- Test Discrete Inputs ----------
+
+        widgets.append(DashboardWidget(
             dashboard=dashboard,
-            tag=tag,
-            widget_type=DashboardWidget.WidgetTypeChoices.LED,
+            widget_type=DashboardWidget.WidgetTypeChoices.LABEL,
             config = {
                 "position_x": 0,
-                "position_y": 1,
-                "scale_x" : 1,
+                "position_y": 5,
+                "scale_x" : 2,
                 "scale_y" : 1,
-                "color_on": "green",
-                "color_off": "red",
+                "text" : "Test Discrete Inputs",
             }
-        )
-        widget = DashboardWidget.objects.create(
-            dashboard=dashboard,
-            tag=tag,
-            widget_type=DashboardWidget.WidgetTypeChoices.BOOL_LABEL,
-            config = {
-                "position_x": 0,
-                "position_y": 2,
-                "scale_x" : 1,
-                "scale_y" : 1,
-                "text_on": "On",
-                "text_off": "Off",
-            }
-        )
-        widget = DashboardWidget.objects.create(
-            dashboard=dashboard,
-            tag=tag,
-            widget_type=DashboardWidget.WidgetTypeChoices.SWITCH,
-            config = {
-                "position_x": 0,
-                "position_y": 3,
-                "scale_x" : 1,
-                "scale_y" : 1,
-            }
-        )
+        ))
 
-        tag2 = Tag.objects.create(
-            device=device,
-            alias="Test Coil 2",
-            description="PLC coil 1",
-            channel=Tag.ChannelChoices.COIL,
-            data_type=Tag.DataTypeChoices.BOOL,
-            address=1,
-        )
+        for i in range(len(di_tags)):
+            widgets.append(DashboardWidget(
+                dashboard=dashboard,
+                tag=di_tags[i],
+                widget_type=DashboardWidget.WidgetTypeChoices.LED,
+                config = {
+                    "position_x": i,
+                    "position_y": 6,
+                    "scale_x" : 1,
+                    "scale_y" : 1,
+                    "color_on": "green",
+                    "color_off": "red",
+                }
+            ))
+            widgets.append(DashboardWidget(
+                dashboard=dashboard,
+                tag=di_tags[i],
+                widget_type=DashboardWidget.WidgetTypeChoices.BOOL_LABEL,
+                config = {
+                    "position_x": i,
+                    "position_y": 7,
+                    "scale_x" : 1,
+                    "scale_y" : 1,
+                    "text_on": "On",
+                    "text_off": "Off",
+                }
+            ))
 
-        widget = DashboardWidget.objects.create(
+        # ---------- Test Input Registers ----------
+
+        widgets.append(DashboardWidget(
             dashboard=dashboard,
-            tag=tag2,
-            widget_type=DashboardWidget.WidgetTypeChoices.LED,
+            widget_type=DashboardWidget.WidgetTypeChoices.LABEL,
             config = {
-                "position_x": 1,
-                "position_y": 1,
-                "scale_x" : 1,
+                "position_x": 9,
+                "position_y": 0,
+                "scale_x" : 3,
                 "scale_y" : 1,
-                "color_on": "green",
-                "color_off": "red",
+                "text" : "Test Input Registers",
             }
-        )
-        widget = DashboardWidget.objects.create(
+        ))
+
+        for i in range(len(ir_tags)):
+            widgets.append(DashboardWidget(
+                dashboard=dashboard,
+                tag=ir_tags[i],
+                widget_type=DashboardWidget.WidgetTypeChoices.METER,
+                config = {
+                    "position_x": 9,
+                    "position_y": i+1,
+                    "scale_x" : 5,
+                    "scale_y" : 1,
+                }
+            ))
+
+        widgets.append(DashboardWidget(
             dashboard=dashboard,
-            tag=tag2,
-            widget_type=DashboardWidget.WidgetTypeChoices.BOOL_LABEL,
+            tag=chart_tag,
+            widget_type=DashboardWidget.WidgetTypeChoices.LINE_CHART,
             config = {
-                "position_x": 1,
-                "position_y": 2,
-                "scale_x" : 1,
-                "scale_y" : 1,
-                "text_on": "On",
-                "text_off": "Off",
+                "position_x": 9,
+                "position_y": 5,
+                "scale_x" : 5,
+                "scale_y" : 3,
             }
-        )
-        widget = DashboardWidget.objects.create(
+        ))
+
+        # ---------- Test Holding Registers ----------
+
+        widgets.append(DashboardWidget(
             dashboard=dashboard,
-            tag=tag2,
-            widget_type=DashboardWidget.WidgetTypeChoices.SWITCH,
+            widget_type=DashboardWidget.WidgetTypeChoices.LABEL,
             config = {
-                "position_x": 1,
-                "position_y": 3,
-                "scale_x" : 1,
+                "position_x": 15,
+                "position_y": 0,
+                "scale_x" : 3,
                 "scale_y" : 1,
+                "text" : "Test Holding Registers",
             }
-        )
+        ))
+
+        for i in range(len(hr_tags)):
+            widgets.append(DashboardWidget(
+                dashboard=dashboard,
+                tag=hr_tags[i],
+                widget_type=DashboardWidget.WidgetTypeChoices.METER,
+                config = {
+                    "position_x": 15,
+                    "position_y": 2*i+1,
+                    "scale_x" : 5,
+                    "scale_y" : 1,
+                }
+            ))
+            widgets.append(DashboardWidget(
+                dashboard=dashboard,
+                tag=hr_tags[i],
+                widget_type=DashboardWidget.WidgetTypeChoices.SLIDER,
+                config = {
+                    "position_x": 15,
+                    "position_y": 2*i+2,
+                    "scale_x" : 5,
+                    "scale_y" : 1,
+                }
+            ))
+
+        DashboardWidget.objects.bulk_create(widgets)
+
+        # ---------- Alarms ----------
+
+        alarms = []
+
+        alarms.append(AlarmConfig(
+            tag=coil_tags[-3],
+            trigger_value=True,
+            owner=user,
+            alias="test alarm 1",
+            message="testing alarm 1",
+            threat_level = AlarmConfig.ThreatLevelChoices.LOW,
+        ))
+        alarms.append(AlarmConfig(
+            tag=coil_tags[-2],
+            trigger_value=True,
+            owner=user,
+            alias="test alarm 2",
+            message="testing alarm 2",
+            threat_level = AlarmConfig.ThreatLevelChoices.HIGH,
+        ))
+        alarms.append(AlarmConfig(
+            tag=coil_tags[-1],
+            trigger_value=True,
+            owner=user,
+            alias="test alarm 3",
+            message="testing alarm 3",
+            threat_level = AlarmConfig.ThreatLevelChoices.CRITICAL,
+        ))
+
+        AlarmConfig.objects.bulk_create(alarms)

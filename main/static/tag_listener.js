@@ -11,9 +11,11 @@ export class TagListener {
         this.tagMap[widget.tag].push(widget);
     }
 
-    connect() {
+    async connect() {
         const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
         const path = `${protocol}${window.location.host}/ws/dashboard/`;
+
+        await this.fetchAll();
 
         this.socket = new WebSocket(path);
 
@@ -27,7 +29,10 @@ export class TagListener {
             const payload = JSON.parse(e.data);
             // main.consumers.tag_update
             if (payload.type === "tag_update") {
-                this.handleUpdates(payload.data);
+                const updates = payload.data;
+                Object.keys(updates).forEach(tagId => {
+                    this.updateWidget(tagId, updates[tagId]);
+                });
             }
         };
 
@@ -36,6 +41,27 @@ export class TagListener {
             document.getElementById("connection-banner")?.classList.remove("hidden");
             setTimeout(() => this.connect(), this.retryInterval);
         };
+    }
+
+    async fetchAll() {
+        const tagIds = Object.keys(this.tagMap).join(",");
+        if (tagIds.length === 0) return;
+
+        try {
+            const req = await fetch(`/api/values/?tags=${tagIds}`);
+
+            if (!req.ok) throw new Error("Batch fetch failed");
+
+            const response = await req.json();
+            console.log(response);
+            response.forEach(data => {
+                this.updateWidget(data.id, data);
+            })
+
+        } 
+        catch (err) {
+            console.error("Fetching error:", err);
+        }
     }
 
     sendSubscription() {
@@ -51,24 +77,23 @@ export class TagListener {
         }));
     }
 
-    handleUpdates(updates) {
-        // Use all the new data we got
-        Object.keys(updates).forEach(tagId => {
-            const tagWidgets = this.tagMap[tagId];
-            if(!tagWidgets)
-                return;
+    updateWidget(tagId, update) {
+        const tagWidgets = this.tagMap[tagId];
+        if(!tagWidgets)
+            return;
 
-            const update = updates[tagId];
-
-            tagWidgets.forEach(widget => {
-                widget.onData(update);
-            });
+        tagWidgets.forEach(widget => {
+            widget.onData(update);
         });
     }
 
     clear() {
+        console.log("WebSocket stopped");
         this.tagMap = {};
-        if(this.socket)
+        if(this.socket) {
+            this.socket.onclose = null;
             this.socket.close();
+            this.socket = null;
+        }
     }
 }

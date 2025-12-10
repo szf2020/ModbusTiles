@@ -158,7 +158,7 @@ class Dashboard {
         }
     }
 
-    setupWidgets(widgetData) {
+    async setupWidgets(widgetData) {
         if(!this.canvasGridStack) {
             console.error("Gridstack not initialized");
             return;
@@ -178,7 +178,7 @@ class Dashboard {
                 const widget = this.createWidget(wData.widget_type, wData.tag, wData.config);
                 this.listener.registerWidget(widget);
             });
-            this.listener.connect();
+            await this.listener.connect();
         }
     }
 
@@ -306,7 +306,7 @@ class Dashboard {
             const widgets = await response.json();
 
             // Set up recieved info
-            this.setupWidgets(widgets);
+            await this.setupWidgets(widgets);
         } 
         catch (err) {
             console.error(err);
