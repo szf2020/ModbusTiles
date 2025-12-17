@@ -26,7 +26,7 @@ class Widget {
         this.tag = tag;
         this.elem = gridElem.querySelector('.dashboard-widget');
         this.valueTimeout = 5000;
-        this.alarmIndicator = this.elem.parentNode?.querySelector(".alarm-indicator");
+        this.alarmIndicator = gridElem.querySelector(".alarm-indicator");
         this.label = this.elem.parentNode?.querySelector(".widget-label");
         this.gridElem = gridElem;
         gridElem.widgetInstance = this;
@@ -84,7 +84,7 @@ class Widget {
         if(!this.alarmIndicator)
             return;
 
-        this.elem.classList.remove("threat-high");
+        this.gridElem.classList.remove("threat-high");
         
         if(alarm) {
             this.alarmIndicator.classList.remove("hidden");
@@ -98,7 +98,7 @@ class Widget {
                     break;
                 case "crit":
                     this.alarmIndicator.innerHTML = "‼️";
-                    this.elem.classList.add("threat-high");
+                    this.gridElem.classList.add("threat-high");
                     break;
             }
         }
@@ -134,15 +134,29 @@ class Widget {
         }
 
         this.elem.title = this.tag ? this.tag.alias : "";
-
-        if(this.text_elem) { //TODO
-            const amt = this.text_elem.textContent.length;
-            this.text_elem.style.fontSize = `${120 / Math.sqrt(amt)}cqmin`
-        }
     }
 
     getConfirmMessage(val) {
         return `Change ${this.tag.alias} to ${val}?`
+    }
+
+    updateFontSize() { // TODO method or function? (eg updateFontSize(this.text_elem))
+        if (this.text_elem) {
+            const amt = Math.round(this.text_elem.textContent.length / 3) * 3;
+            const k = 100;
+
+            // measure container
+            const rect = this.text_elem.parentElement.getBoundingClientRect();
+            const aspect = rect.width / rect.height;
+
+            // width assist factor (>= 1)
+            const widthBoost = Math.min(1.75, Math.sqrt(aspect));
+            const textScale = (k / Math.sqrt(amt));
+            
+            // store CSS variables
+            this.text_elem.style.setProperty('--text-scale', textScale);
+            this.text_elem.style.setProperty('--width-boost', widthBoost);
+        }
     }
 
     onValue(val) {
@@ -172,6 +186,7 @@ class LabelWidget extends Widget { //TODO font size, formatting?
     applyConfig() {
         super.applyConfig();
         this.text_elem.textContent = this.config.text;
+        this.updateFontSize();
     }
 }
 
@@ -193,11 +208,13 @@ class BoolLabelWidget extends Widget {
 
     applyConfig() {
         super.applyConfig();
-        this.clear();
+        this.onValue(false);
+        this.updateFontSize();
     }
 
     onValue(val) {
         this.text_elem.textContent = val ? this.config.text_on : this.config.text_off;
+        this.updateFontSize();
     }
 
     clear() {
@@ -484,9 +501,15 @@ class MultiLabelWidget extends Widget {
         this.text_elem = this.elem.querySelector(".label_text");
     }
 
+    applyConfig() {
+        super.applyConfig();
+        this.updateFontSize();
+    }
+
     onValue(val) {
         const kv = this.config.label_values.find(kv => kv.value == val);
         this.text_elem.textContent = kv ? kv.label : `Unknown Value: ${val}`;
+        this.updateFontSize();
     }
 
     clear() {
@@ -510,11 +533,13 @@ class NumberLabelWidget extends Widget {
 
     applyConfig() {
         super.applyConfig();
-        this.clear();
+        this.onValue(0);
+        this.updateFontSize();
     }
 
     onValue(val) {
         this.text_elem.textContent = this.config.prefix + val.toFixed(this.config.precision) + this.config.suffix;
+        this.updateFontSize();
     }
 
     clear() {

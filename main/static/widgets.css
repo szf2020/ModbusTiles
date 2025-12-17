@@ -54,7 +54,7 @@
 }
 
 .alarm-indicator {
-    font-size: 0.7em;
+    font-size: 2em;
     vertical-align: baseline;
     position: relative;
     top: 0.3em;
@@ -194,6 +194,18 @@ input:checked + .switch_slider:before {
     
     word-wrap: break-word;
     white-space: pre-wrap;
+}
+
+.label_text {
+  font-size: clamp(
+    0.75rem,
+    calc(
+      var(--text-scale)
+      * var(--width-boost)
+      * 1cqh
+    ),
+    5rem
+  );
 }
 
 /* --- Chart --- */
