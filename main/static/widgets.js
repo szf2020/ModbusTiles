@@ -549,99 +549,202 @@ class NumberLabelWidget extends Widget {
 
 class ChartWidget extends Widget { 
     static displayName = "History Chart";
-    static allowedChannels = ["hr", "ir"]; //TODO support boolean values
+    static allowedChannels = ["hr", "ir"]; 
     static allowedTypes = ["int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64"];
     static customFields = [
-        { name: "title", type: "text", default: "Title", label: "Title" },
-        { name: "history_seconds", type: "number", default: 60, label: "History Length (seconds)" },
+        { name: "title", type: "text", default: "Tag History", label: "Title" },
+        { name: "history_seconds", type: "number", default: 60, label: "History Length (s)" },
+        { name: "chart_type", type: "select", default: "line", label: "Chart Type",
+            options: [
+                { value: "line", label: "Line Chart" },
+                { value: "area", label: "Area Chart" },
+                { value: "bar", label: "Bar Chart" },
+            ]
+        },
+        { name: "plot_mode", type: "select", default: "lines", label: "Line Mode",
+            options: [
+                { value: "lines", label: "Lines Only" },
+                { value: "markers", label: "Points Only" },
+                { value: "lines+markers", label: "Lines & Points" }
+            ]
+        },
+        { name: "line_color", type: "color", default: "#17BECF", label: "Line Color" },
+        { name: "line_width", type: "number", default: 2, label: "Line Width" },
+        { name: "show_grid", type: "bool", default: true, label: "Show Grid" },
     ]
 
     constructor(widget_elem, config, tagID) {
         super(widget_elem, config, tagID);
         this.chartDiv = this.elem.querySelector(".chart-container");
+        this.pauseButton = this.elem.querySelector(".form-button");
+        this.realData = false;
+        this.initPreview();
 
-        this.historyDurationSeconds = this.config.history_seconds;
-        //this.maxPoints = this.config.max_points || 1000;
+        // Size chart to gridstack elem
+        this.resizeObserver = new ResizeObserver(() => {
+            Plotly.Plots.resize(this.chartDiv);
+        });
+        this.resizeObserver.observe(this.elem);
+
+        this.pauseButton.addEventListener("click", () => {
+            this.togglePaused();
+        })
+        this.chartDiv.innerText = "";
     }
 
-    async initChart() {
+    initPreview() {
+        const now = new Date();
+        const x = [], y = [];
+        for(let i=0; i<20; i++) {
+            x.push(new Date(now.getTime() - (20-i)*1000).toISOString());
+            y.push(Math.sin(i/3) * 10);
+        }
+
+        // Store as "last" data so applyConfig has something to work with
+        this.lastX = x;
+        this.lastY = y;
+
+        const config = { responsive: true, displayModeBar: false, staticPlot: true }; // Static plot for editor
+        
+        Plotly.newPlot(this.chartDiv, [this._getTrace(x, y)], this._getLayout(), config);
+
+        this.realData = false;
+    }
+
+    async initHistory() {
+        if(this.initializing)
+            return;
+
+        this.initializing = true;
+
         try {
-            const response = await fetch(`/api/history/?tags=${this.tag.external_id}&seconds=${this.historyDurationSeconds}`);
+            // Fetch real history data
+            const response = await fetch(`/api/history/?tags=${this.tag.external_id}&seconds=${this.config.history_seconds}`);
             if (!response.ok) throw new Error("History fetch failed");
 
             const data = await response.json();
-            
             const timestamps = data.map(e => e.timestamp);
             const values = data.map(e => e.value);
 
-            console.log("Got", values.length, "values from history");
-
-            // Data trace
-            const trace = {
-                x: timestamps,
-                y: values,
-                mode: 'lines',
-                type: 'scatter',
-                line: { color: this.config.line_color || '#17BECF' }
-            };
-
-            // Layout
-            const layout = {
-                title: this.config.title || 'Tag History',
-                autosize: true,
-                margin: { l: 30, r: 10, b: 30, t: 30, pad: 4 },
-                xaxis: {
-                    type: 'date',
-                },
-                yaxis: {
-                    autorange: true
-                },
-                //paper_bgcolor: 'rgba(0,0,0,0)',
-                //plot_bgcolor: 'rgba(0,0,0,0)',
-                //font: {
-                //    color: '#ccc'
-                //}
-            };
-
             const config = { responsive: true, displayModeBar: false };
 
-            await Plotly.newPlot(this.chartDiv, [trace], layout, config);
-
-            this.initialized = true;
+            await Plotly.newPlot(this.chartDiv, [this._getTrace(timestamps, values)], this._getLayout(), config);
+            this.realData = true;
         } 
         catch (err) {
             console.error("Error initializing chart:", err);
-            this.chartDiv.innerHTML = "Error loading chart data";
+            this.chartDiv.innerHTML = `<div class="error-msg">Error loading chart</div>`;
         }
+        finally {
+            this.initializing = false;
+        }        
+    }
+
+    togglePaused() {
+        this.paused = !this.paused;
+        this.pauseButton.innerText = this.paused ? "⏵︎" : "⏸︎";
+        this.pauseButton.title = this.paused ? "Play" : "Pause";
+        if(!this.paused && this.realData)
+            this.initHistory();
     }
 
     applyConfig() {
         super.applyConfig();
-        //TODO
+        
+        // If the chart exists, update layout/style without full re-fetch
+        Plotly.react(this.chartDiv, [this._getTrace(this.lastX || [], this.lastY || [])], this._getLayout(), { 
+            responsive: true, displayModeBar: false 
+        });
     }
 
     onValue(val, time) { 
-        if(this.paused) //TODO add pause button 
+        if(!this.realData) {
+            this.initHistory();
             return;
-
-        if(this.initialized) {
-            const updateTime = new Date(time);
-            const timeStr = updateTime.toISOString();
-
-            const startTime = new Date(updateTime.getTime() - (this.historyDurationSeconds * 1000));
-            const startTimeStr = startTime.toISOString();
-
-            Plotly.extendTraces(this.chartDiv, {
-                x: [[timeStr]],
-                y: [[val]]
-            }, [0], this.maxPoints);
-            Plotly.relayout(this.chartDiv, {
-                'xaxis.range': [startTimeStr, timeStr]
-            });
         }
-        else {
-            this.initChart();
+        if(this.paused) {
+            return;
         }
+
+        const updateTime = new Date(time);
+        const timeStr = updateTime.toISOString();
+        const startTime = new Date(updateTime.getTime() - (this.config.history_seconds * 1000));
+
+        const traces = { 
+            x: [[timeStr]], 
+            y: [[val]] 
+        };
+
+        Plotly.extendTraces(this.chartDiv, traces, [0]);
+
+        Plotly.relayout(this.chartDiv, {
+            'xaxis.range': [startTime.toISOString(), timeStr]
+        });
+    }
+
+    clear() {
+        if(!this.realData)
+            return;
+        
+        this.initPreview();
+    }
+
+    _getLayout() {
+        const textColor = getComputedStyle(document.body).getPropertyValue('--text-main');
+        const gridColor = this.config.show_grid ? 'rgba(128, 128, 128, 0.2)' : 'rgba(0,0,0,0)';
+
+        return {
+            title: {
+                text: this.config.title,
+                font: { color: textColor }
+            },
+            autosize: true,
+            margin: { l: 40, r: 10, b: 30, t: 40, pad: 4 },
+            xaxis: {
+                //type: isHist ? 'linear' : 'date',
+                type: 'date',
+                gridcolor: gridColor,
+                linecolor: textColor,
+                tickfont: { color: textColor }
+            },
+            yaxis: {
+                autorange: true,
+                gridcolor: gridColor,
+                linecolor: textColor,
+                tickfont: { color: textColor }
+            },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+        };
+    }
+
+    _getTrace(xData, yData) {
+        // Default to scatter
+        let traceType = 'scatter';
+        let fillMode = 'none';
+
+        // Handle specific Chart Types
+        if (this.config.chart_type === 'bar') {
+            traceType = 'bar';
+        } 
+        else if (this.config.chart_type === 'area') {
+            fillMode = 'tozeroy'; // Fills space under the line
+        }
+
+        return {
+            x: xData,
+            y: yData,
+            type: traceType,
+            mode: this.config.plot_mode, // Only affects 'scatter' type
+            fill: fillMode,              // Only affects 'scatter' type
+            marker: {                    // Used for 'bar' and 'scatter' points
+                color: this.config.line_color
+            },
+            line: { 
+                color: this.config.line_color,
+                width: this.config.line_width 
+            }
+        };
     }
 }
 

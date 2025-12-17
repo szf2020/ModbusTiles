@@ -186,32 +186,31 @@ input:checked + .switch_slider:before {
     overflow: hidden; 
 }
 .dashboard-widget .label_text {
-    /* font-size: 40cqmin; */
-    
     line-height: 1;
     text-align: center;
     width: 100%;
     
     word-wrap: break-word;
     white-space: pre-wrap;
-}
 
-.label_text {
-  font-size: clamp(
-    0.75rem,
-    calc(
-      var(--text-scale)
-      * var(--width-boost)
-      * 1cqh
-    ),
-    5rem
-  );
+    font-size: clamp(
+        0.75rem,
+        calc(
+        var(--text-scale)
+        * var(--width-boost)
+        * 1cqh
+        ),
+        5rem
+    );
 }
 
 /* --- Chart --- */
 
 .dashboard-widget.chart,
 .chart-container {
-    width: 100%; 
-    height: 100%;
+    width: 95%; 
+    height: 95%;
+}
+.dashboard-widget.chart .form-button {
+    float: right;
 }
