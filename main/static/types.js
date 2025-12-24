@@ -1,0 +1,99 @@
+/** @typedef {'coil' | 'di' | 'hr' | 'ir'} ChannelType */
+/** @typedef {'bool' | 'int16' | 'uint16' | 'int32' | 'uint32' | 'int64' | 'uint64' | 'float32' | 'float64' | 'string'} DataType */
+/** @typedef {'low' | 'high' | 'crit'} ThreatLevel */
+/** @typedef {'tcp' | 'udp' | 'serial'} DeviceProtocol */
+
+/**
+ * Object recieved from `api.serializers.AlarmConfigDropdownSerializer`
+ * @typedef {Object} AlarmConfigListObject
+ * @property {string} alias Name of the alarm config
+ * @property {ThreatLevel} threat_level The urgency of the alarm
+ * @property {string} message Message that subscribers to the alarm recieve
+ */
+
+/**
+ * Object recieved from `api.serializers.TagValueSerializer`
+ * @typedef {Object} TagValueObject
+ * @property {string} id The UUID of the tag
+ * @property {string|number|boolean} value The current value of the tag
+ * @property {number} age The age in seconds of the tag value
+ * @property {AlarmConfigListObject} alarm The alarm associated with this tag, if active
+ */
+
+/**
+ * Object recieved from `api.serializers.TagDropdownSerializer` through `/api/tags/`
+ * @typedef {Object} TagListObject
+ * @property {string} external_id The UUID of the tag
+ * @property {string} alias Human readable name (e.g. "Sump Level")
+ * @property {string} description Longer description
+ * @property {DataType} data_type How the value from the PLC memory is interpreted
+ * @property {ChannelType} channel The register type
+ * @property {number} address The 0-indexed starting register
+ * @property {number} [bit_index] Optional bit index (0-15)
+ */
+
+/**
+ * Object recieved from `api.serializers.DeviceDropdownSerializer` through `/api/devices/`
+ * @typedef {Object} DeviceListObject
+ * @property {string} alias Unique name of device
+ * @property {DeviceProtocol} protocol The type of Modbus connection
+ */
+
+/**
+ * Object for storing an html option
+ * @typedef {Object} ChoiceObject
+ * @property {string} value The choice value
+ * @property {string|number} label The choice name
+ */
+
+/**
+ * Object recieved from `api.views.TagMetadataView` through `/api/tag-options/`
+ * @typedef {Object} TagOptionsObject
+ * @property {ChoiceObject[]} channels Choices for tag channels
+ * @property {ChoiceObject[]} data_types Choices for tag datatypes
+ */
+
+/**
+ * Object recieved from `api.views.TagMetadataView` through `/api/tag-options/`
+ * @typedef {Object} AlarmOptionsObject
+ * @property {ChoiceObject[]} operator_choices Choices for alarm comparison operators
+ * @property {ChoiceObject[]} threat_levels Choices for alarm threat levels
+ */
+
+/**  
+ * Objects recieved from `api.serializers.DashboardWidgetSerializer` through `/api/dashboard-widgets/`
+ * @typedef {Object} DashboardWidgetInfoObject
+ * @property {string} tag The UUID of the tag assigned to the widget
+ * @property {string} widget_type The name of the widget class (mapped in `WidgetRegistry` in `widgets.js`)
+ * @property {Object} config The config object of the widget (position, scale, default and custom fields)
+ */
+
+/**
+ * Object used in `api.views.DashboardViewSet.save_data`
+ * @typedef {Object} DashboardConfigObject
+ * @property {string} alias The unique name of the Dashboard
+ * @property {string} description Extra info
+ * @property {number} column_count The number of columns in the GridStack grid
+ * @property {DashboardWidgetInfoObject[]} widgets Config for all widgets
+ */
+
+/**
+ * @typedef {Object} ServerCacheObject
+ * @property {TagListObject[]} tags All tags registered on the server
+ * @property {DeviceListObject[]} devices All devices registered on the server
+ * @property {TagOptionsObject} tagOptions Choice collection for tag attributes
+ * @property {AlarmOptionsObject} alarmOptions Choice collection for alarm attributes
+*/
+
+/** 
+ * Defines a widget config property editable in the Inspector
+ * @typedef {Object} InspectorFieldDefinition
+ * @property {string} name Config attribute to read/write to
+ * @property {string} [type] 'bool', 'int', 'float', 'number', 'color', 'select', 'enum'
+ * @property {*} default The attribute to apply to the widget config if undefined
+ * @property {string} label The text to display above the input
+ * @property {string} [description] The html title to apply to the label
+ * @property {ChoiceObject[]} [options]
+ */
+
+export {};

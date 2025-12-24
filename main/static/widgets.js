@@ -1,16 +1,52 @@
-import { postServer } from "./util.js";
+import { postServer } from "./global.js";
+/** @import { TagListObject, TagValueObject, AlarmConfigListObject, InspectorFieldDefinition, ChannelType, DataType } from "./types.js" */
 
-class Widget {
-    static displayName = "Default Widget";
+/**
+ * Abstract class for dashboard widgets.
+ * 
+ * Can be registered with TagListener to recieve updates from the server.
+ * `onValue` determines how those updates are handled
+ * @abstract
+ */
+export class Widget {
+    /** 
+     * Channel filter for tag selection
+     * @type {ChannelType[]}
+     */
     static allowedChannels = [];
+
+    /** 
+     * Type filter for tag selection
+     * @type {DataType[]}
+     */
     static allowedTypes = [];
+
+    /**
+     * Inspector fields that apply to all widgets
+     * @type {InspectorFieldDefinition[]}
+     */
     static defaultFields = [
         { name: "locked", type: "bool", default: false, label: "Position Locked" },
         { name: "showTagName", type: "bool", default: true, label: "Show Tag Name" },
     ];
+
+    /**
+     * Subclass-specific inspector fields 
+     * @type {InspectorFieldDefinition[]}
+     */
     static customFields = [];
+
+    /**
+     * Subclass-specific fields which change form input based on tag datatype
+     * @type {InspectorFieldDefinition[]}
+     */
     static tagTypedFields = [];
 
+    /**
+     * @param {HTMLElement} gridElem 
+     * @param {Object} config 
+     * @param {TagListObject} tag 
+     */
     constructor(gridElem, config, tag) {      
         // Apply defaults
         if(!config) config = {};
@@ -19,15 +55,26 @@ class Widget {
             if(config[field.name] === undefined)
                 config[field.name] = field.default;
         });
+
+        /**@type {TagListObject} meta describing the tag this widget should use */
+        this.tag = tag;
+
+        /** The entries for defaultFields, customFields, etc. Fields not provided are set to default */
+        /** @type {Object} */
         this.config = config;
 
-        this.tag = tag;
-        this.elem = gridElem.querySelector('.dashboard-widget');
-        this.valueTimeout = 5000;
-        this.alarmIndicator = gridElem.querySelector(".alarm-indicator");
-        this.label = this.elem.parentNode?.querySelector(".widget-label");
+        /** @type {HTMLElement} The GridStack element */
         this.gridElem = gridElem;
         gridElem.widgetInstance = this;
+        
+        /** @type {HTMLElement} The contents of the GridStack widget */
+        this.elem = gridElem.querySelector('.dashboard-widget');
+
+        /** @type {number} Age in ms the widget's value can be before displaying as stale  */
+        this.valueTimeout = 5000;
+
+        this.alarmIndicator = gridElem.querySelector(".alarm-indicator");
+        this.tagLabel = this.elem.parentNode?.querySelector(".widget-label");
 
         // Apply visual updates after construction
         setTimeout(() => {
@@ -35,6 +82,10 @@ class Widget {
         }, 0);
     }
 
+    /**
+     * Handles new data from the server. Called from TagListener
+     * @param {TagValueObject} data The update recieved
+     */
     onData(data) {
         if(data.age > this.valueTimeout) 
             this.elem.classList.add("is-state", "no-connection");
@@ -46,6 +97,10 @@ class Widget {
         this.setAlarm(data.alarm);
     }
 
+    /**
+     * Visually updates the widget with the alarm from onData
+     * @param {AlarmConfigListObject} alarm The alarm config info
+     */
     setAlarm(alarm) {
         if(!this.alarmIndicator)
             return;
@@ -74,6 +129,11 @@ class Widget {
         }
     }
 
+    /**
+     * 
+     * Updates the widget's visual contents based on the current state of the config.
+     * Called immediately after the widget is finished constructing, and when data changes in the Inspector
+     */
     applyConfig() {
         // Handle "locked" state
         const widgetNode = this.gridElem?.gridstackNode;
@@ -90,35 +150,65 @@ class Widget {
             this.gridElem.classList.remove("is-state", "locked");
 
         // Show tag alias
-        if(this.label) {
+        if(this.tagLabel) {
             if(this.config.showTagName) {
-                this.label.classList.remove("hidden");
-                this.label.textContent = this.tag ? this.tag.alias : "No Tag";
-                this.label.title = this.tag ? this.tag.description : "";
+                this.tagLabel.classList.remove("hidden");
+                this.tagLabel.textContent = this.tag ? this.tag.alias : "No Tag";
+                this.tagLabel.title = this.tag ? this.tag.description : "";
             }
             else {
-                this.label.classList.add("hidden");
+                this.tagLabel.classList.add("hidden");
             }
         }
         this.elem.title = this.tag ? this.tag.alias : "";
     }
 
-    onValue(val) {
+    /**
+     * Called when a new value for the tag is recieved from the server
+     * @param {string | number | boolean} val
+     * @param {string} time
+     */
+    onValue(val, time) {
         return;
     }
 
+    /**
+     * Handles new value from `onData`
+     */
     clear() {
         return;
     }
 }
 
+/**
+ * Abstract class for widgets than can write data.
+ * 
+ * Upon submitting a value, the widget will be locked until fail or a new value is read.
+ * A fail effect will be created if the submit request fails, or a success effect if the next value read is the submitted value
+ * @abstract
+ */
 class InputWidget extends Widget {
     static defaultFields = [ ...Widget.defaultFields,
         { name: "confirmation", type: "bool", default: false, label: "Prompt Confirmation" },
     ];
 
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
+
+        /** Last value submitted successfully */
+        this.lastSubmitted = null;
+
+        /** Last value recieved from onValue */
+        this.lastValue = null;
+    }
+
+    /**
+     * Message the server to update this widget's tag with a new value, if it needs updating.
+     * Prompts the user before submitting, if configured
+     * @param {any} value The desired new value
+     */
     async trySubmit(value) {
-        this.submittedValue = null;
+        this.lastSubmitted = null;
 
         if(value === this.lastValue || !this.tag) {
             return;
@@ -132,24 +222,32 @@ class InputWidget extends Widget {
         this.elem.classList.add('pending'); //TODO schedule remove?
 
         if(submitted)
-            this.submittedValue = value;
+            this.lastSubmitted = value;
         else {
             // Write request submission failed
             this.onValue(this.lastValue);
-            flashBool(false, this.elem);
+            flashBool(this.elem, false);
         }
     }
 
+    /**
+     * @returns the string to prompt the user with before submitting, if `this.config.confirmation`
+     */
     getConfirmMessage(val) {
         return `Change ${this.tag.alias} to ${val}?`
     }
 
+    /**
+     * 
+     * Checks if the new value is what was just submitted
+     * @inheritdoc
+     */
     onValue(val) {
         this.lastValue = val;
-        if(this.submittedValue !== null && val == this.submittedValue) {
+        if(this.lastSubmitted !== null && val == this.lastSubmitted) {
             // Value changed successfully!
-            flashBool(true, this.elem);
-            this.submittedValue = null;
+            flashBool(this.elem, true);
+            this.lastSubmitted = null;
         }
         this.elem.classList.remove('pending');
     }
@@ -158,13 +256,12 @@ class InputWidget extends Widget {
 // -------- Static Widgets --------
 
 class LabelWidget extends Widget { //TODO font size, formatting?
-    static displayName = "Label";
     static customFields = [
         { name: "text", type: "text", default: "Label Text", label: "Text" },
     ]
 
-    constructor(widget_elem, config) {
-        super(widget_elem, config);
+    constructor(gridElem, config) {
+        super(gridElem, config);
         this.text_elem = this.elem.querySelector(".label_text");
     }
 
@@ -178,7 +275,6 @@ class LabelWidget extends Widget { //TODO font size, formatting?
 // -------- Boolean Widgets --------
 
 class BoolLabelWidget extends Widget {
-    static displayName = "Boolean Label";
     static allowedChannels = ["coil", "di", "hr", "ir"];
     static allowedTypes = ["bool"];
     static customFields = [
@@ -190,8 +286,8 @@ class BoolLabelWidget extends Widget {
         },
     ]
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.text_elem = this.elem.querySelector(".label_text");
     }
 
@@ -212,12 +308,11 @@ class BoolLabelWidget extends Widget {
 }
 
 class SwitchWidget extends InputWidget {
-    static displayName = "Switch";
     static allowedChannels = ["coil", "hr"];
     static allowedTypes = ["bool"];
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.input = this.elem.querySelector(".switch-input");
         this.input.addEventListener("change", async () => this.trySubmit(this.input.checked));
     }
@@ -237,7 +332,6 @@ class SwitchWidget extends InputWidget {
 }
 
 class LEDWidget extends Widget {
-    static displayName = "Light";
     static allowedChannels = ["coil", "di", "hr", "ir"];
     static allowedTypes = ["bool"];
     static customFields = [
@@ -249,8 +343,8 @@ class LEDWidget extends Widget {
         },
     ]
     
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.indicator = this.elem.querySelector(".indicator");
     }
 
@@ -267,7 +361,6 @@ class LEDWidget extends Widget {
 // -------- Number Widgets --------
 
 class ButtonWidget extends InputWidget {
-    static displayName = "Slider";
     static allowedChannels = ["coil", "hr"];
     static allowedTypes = ["bool", "int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64", "string"];
     static customFields = [
@@ -280,8 +373,8 @@ class ButtonWidget extends InputWidget {
         }
     ]
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.button = this.elem.querySelector(".form-button");
         this.button.addEventListener("click", async () => this.trySubmit(this.config.submit_value));
     }
@@ -289,12 +382,10 @@ class ButtonWidget extends InputWidget {
     applyConfig() {
         super.applyConfig();
         this.button.innerText = this.config.button_text;
-        this.button.title = `Submit ${this.submit_value}`;
     }
 }
 
 class DropdownWidget extends InputWidget {
-    static displayName = "Dropdown";
     static allowedChannels = ["hr"];
     static allowedTypes = ["int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64"];
     static customFields = [
@@ -302,8 +393,8 @@ class DropdownWidget extends InputWidget {
         { name: "confirmation", type: "bool", default: false, label: "Prompt Confirmation" },
     ]
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.select = this.elem.querySelector(".form-input"); //TODO?
         this.select.addEventListener("change", async () => this.trySubmit(Number(this.select.value)));
     }
@@ -333,7 +424,6 @@ class DropdownWidget extends InputWidget {
 }
 
 class SliderWidget extends InputWidget {
-    static displayName = "Slider";
     static allowedChannels = ["hr"];
     static allowedTypes = ["int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64"];
     static customFields = [
@@ -346,8 +436,8 @@ class SliderWidget extends InputWidget {
         { name: "display_value", type: "bool", default: false, label: "Show Value" },
     ]
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.input = this.elem.querySelector(".slider-input");
         this.min_label = this.elem.querySelector(".min-label");
         this.max_label =  this.elem.querySelector(".max-label");
@@ -404,7 +494,6 @@ class SliderWidget extends InputWidget {
 }
 
 class MeterWidget extends Widget {
-    static displayName = "Meter";
     static allowedChannels = ["hr", "ir"];
     static allowedTypes = ["int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64"];
     static customFields = [
@@ -425,8 +514,8 @@ class MeterWidget extends Widget {
         { name: "display_value", type: "bool", default: false, label: "Show Value"},
     ]
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.bar = this.elem.querySelector(".meter-bar");
         this.min_label = this.elem.querySelector(".min-label");
         this.max_label =  this.elem.querySelector(".max-label");
@@ -471,15 +560,14 @@ class MeterWidget extends Widget {
 }
 
 class MultiLabelWidget extends Widget {
-    static displayName = "Multi-Value Label";
     static allowedChannels = ["hr", "ir"];
     static allowedTypes = ["int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64"];
     static customFields = [
         { name: "label_values", type: "enum", default: [], label: "Label Values" },
     ]
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.text_elem = this.elem.querySelector(".label_text");
     }
 
@@ -508,14 +596,14 @@ class NumberLabelWidget extends Widget {
         { name: "suffix", type: "text", default: "", label: "Suffix" },
     ]
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.text_elem = this.elem.querySelector(".label_text");
     }
 
     applyConfig() {
         super.applyConfig();
-        this.onValue(0);
+        this.clear();
         fitText(this.text_elem);
     }
 
@@ -539,8 +627,8 @@ class NumberInputWidget extends InputWidget {
         { name: "max", type: "number", default: 100, label: "Maximum Value" },
     ]
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.input = this.elem.querySelector('input');
         this.button = this.elem.querySelector('.form-button');
 
@@ -584,14 +672,13 @@ class NumberInputWidget extends InputWidget {
 }
 
 class ChartWidget extends Widget { 
-    static displayName = "History Chart";
     static allowedChannels = ["hr", "ir"]; 
     static allowedTypes = ["int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64"];
     static customFields = [
         { name: "title", type: "text", default: "Tag History", label: "Title" },
         { name: "history_seconds", type: "number", default: 60, label: "History Length (s)",
             description: "The amount of time that the chart should display.",
-        },
+        }, 
         { name: "chart_type", type: "select", default: "line", label: "Chart Type",
             options: [
                 { value: "line", label: "Line Chart" },
@@ -611,8 +698,8 @@ class ChartWidget extends Widget {
         { name: "show_grid", type: "bool", default: true, label: "Show Grid" },
     ]
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.chartDiv = this.elem.querySelector(".chart-container");
         this.pauseButton = this.elem.querySelector(".form-button");
         this.textColor = getComputedStyle(document.body).getPropertyValue('--text-main');
@@ -629,6 +716,9 @@ class ChartWidget extends Widget {
         this.chartDiv.innerText = "";
     }
 
+    /**
+     * Populate the chart with generated data
+     */
     initPreview() {
         const now = new Date();
         const x = [], y = [];
@@ -648,6 +738,9 @@ class ChartWidget extends Widget {
         this.realData = false;
     }
 
+    /**
+     * Populate the chart with actual data from the server
+     */
     async initHistory() {
         if(this.initializing)
             return;
@@ -678,6 +771,9 @@ class ChartWidget extends Widget {
         }        
     }
 
+    /**
+     * Stop or start the live value feed
+     */
     togglePaused() {
         this.paused = !this.paused;
         this.pauseButton.innerText = this.paused ? "⏵︎" : "⏸︎";
@@ -785,7 +881,6 @@ class ChartWidget extends Widget {
 }
 
 class GaugeWidget extends Widget {
-    static displayName = "Radial Gauge";
     static allowedChannels = ["hr", "ir"];
     static allowedTypes = ["int16", "uint16", "int32", "uint32", "float32", "float64"];
     
@@ -803,12 +898,10 @@ class GaugeWidget extends Widget {
         { name: "suffix", type: "text", default: "", label: "Value Suffix" },
     ];
 
-    constructor(widget_elem, config, tagID) {
-        super(widget_elem, config, tagID);
+    constructor(gridElem, config, tag) {
+        super(gridElem, config, tag);
         this.chartDiv = this.elem.querySelector(".chart-container");
         this.textColor = getComputedStyle(document.body).getPropertyValue('--text-main');
-
-        this.currentValue = this.config.min_value;
 
         this.resizeObserver = throttledResizeObserver(this.elem, () => {
             Plotly.Plots.resize(this.chartDiv);
@@ -819,12 +912,10 @@ class GaugeWidget extends Widget {
 
     applyConfig() {
         super.applyConfig();
-        // Redraw with new ranges/colors
-        this.draw(this.currentValue);
+        this.clear();
     }
 
     onValue(val) {
-        this.currentValue = val;
         this.draw(val);
     }
 
@@ -834,7 +925,7 @@ class GaugeWidget extends Widget {
     }
 
     clear() {
-        this.onValue(0);
+        this.onValue(this.config.min_value);
     }
 
     _getTrace(val) {
@@ -881,6 +972,12 @@ class GaugeWidget extends Widget {
     }
 }
 
+/**
+ * Call a function a given time after an element has stopped resizing
+ * @param {HTMLElement} elem 
+ * @param {()} cb 
+ * @param {number} time 
+ */
 function throttledResizeObserver(elem, cb, time) {
     let resizeTimeout;
     const resizeObserver = new ResizeObserver(() => {
@@ -891,6 +988,10 @@ function throttledResizeObserver(elem, cb, time) {
     return resizeObserver;
 }
 
+/**
+ * Attempt to update an element font size to fit its parent rect
+ * @param {HTMLElement} elem 
+ */
 function fitText(elem) {
     const amt = Math.round(elem.textContent.length / 3) * 3;
     const k = 100;
@@ -903,18 +1004,23 @@ function fitText(elem) {
     const widthBoost = Math.min(1.75, Math.sqrt(aspect));
     const textScale = (k / Math.sqrt(amt));
     
-    // store CSS variables
-    elem.style.setProperty('--text-scale', textScale);
-    elem.style.setProperty('--width-boost', widthBoost);
+    // Set font size
+    elem.style.fontSize = `clamp(0.75rem, calc(${textScale} * ${widthBoost} * 1cqh), 5rem)`;
 }
 
-function flashBool(flag, elem) {
+/**
+ * Create a red or green pulse on an element
+ * @param {HTMLElement} elem 
+ * @param {boolean} flag 
+ */
+function flashBool(elem, flag) {
     const cls = flag ? 'flash-success' : 'flash-error';
     elem.classList.remove('flash-success', 'flash-error');
     void elem.offsetWidth;
     elem.classList.add(cls);
 }
 
+/** String -> Widget class map */
 export const WidgetRegistry = {
     "switch": SwitchWidget,
     "slider": SliderWidget,

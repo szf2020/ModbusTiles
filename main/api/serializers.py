@@ -40,6 +40,18 @@ class DashboardDropdownSerializer(serializers.ModelSerializer):
         fields = ["alias", "description"]
 
 
+class AlarmConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlarmConfig
+        fields = "__all__"
+
+
+class AlarmConfigDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlarmConfig
+        fields = ["alias", "threat_level", "message"]
+
+
 class TagCreateSerializer(serializers.ModelSerializer):
     device = serializers.SlugRelatedField(
         slug_field='alias', 
@@ -103,21 +115,6 @@ class TagUpdateSerializer(serializers.ModelSerializer):
         ]
 
 
-class TagDetailSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Tag
-        fields = "__all__"
-        read_only_fields = [
-            "external_id",
-            "data_type",
-            "channel",
-            "address",
-            "device",
-            "last_updated",
-            "current_value",
-        ]
-
-
 class TagDropdownSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
@@ -130,11 +127,6 @@ class TagDropdownSerializer(serializers.ModelSerializer):
             "bit_index",
             "description",
         ]
-
-
-class TagAlarmSerializer(serializers.Serializer):
-    message = serializers.CharField()
-    threat_level = serializers.CharField()
 
 
 class TagValueSerializer(serializers.ModelSerializer):
@@ -158,10 +150,7 @@ class TagValueSerializer(serializers.ModelSerializer):
     def get_alarm(self, obj: Tag):
         alarm: ActivatedAlarm = self.context.get("alarm_map", {}).get(obj.id)
         if alarm:
-            return {
-                "message": alarm.config.message,
-                "threat_level": alarm.config.threat_level,
-            }
+            return AlarmConfigDropdownSerializer(alarm.config).data
         return None
 
 class TagWriteRequestSerializer(serializers.ModelSerializer):
@@ -189,18 +178,6 @@ class TagWriteRequestSerializer(serializers.ModelSerializer):
 class TagHistoryEntrySerializer(serializers.Serializer):
     timestamp = serializers.DateTimeField()
     value = serializers.JSONField()
-
-
-class AlarmConfigSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AlarmConfig
-        fields = "__all__"
-
-
-class AlarmConfigDropdownSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AlarmConfig
-        fields = ["alias", "threat_level"]
 
 
 class AlarmConfigCreateSerializer(serializers.ModelSerializer):

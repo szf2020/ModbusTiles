@@ -1,11 +1,24 @@
-import { serverCache, refreshData } from "./global.js";
-import { postServer } from "./util.js";
+import { serverCache, refreshData, postServer } from "./global.js";
+/** @import { InspectorFieldDefinition, ChoiceObject, DataType, TagListObject, ChannelType } from "./types.js" */
+/** @import { Widget } from "./widgets.js" */
+/** @import { Dashboard } from "./dashboard.js" */
 
+/**
+ * Manages a form to edit widgets and dashboards, or create tags and alarms
+ */
 export class Inspector {
+    /**
+     * @param {HTMLElement} container 
+     */
     constructor(container) {
+        /**@type {HTMLElement} The element used to display the form */
         this.container = container;
     }
 
+    /**
+     * @param {DataType} dataType 
+     * @returns The relevant form type from a Tag's datatype
+     */
     static getFieldType(dataType) {
         if(dataType === "bool") 
             return "bool";
@@ -17,6 +30,10 @@ export class Inspector {
             return "text";
     }
 
+    /**
+     * @param {TagListObject} tag
+     * @returns The string used for this tag in a dropdown
+     */
     static getTagLabel(tag) {
         const bit = tag.bit_index !== null ? ":" + tag.bit_index : "";
         return `${tag.alias} (${tag.channel} ${tag.address}${bit})`;
@@ -26,6 +43,9 @@ export class Inspector {
         this.container.innerHTML = '';
     }
 
+    /**
+     * @param {string} text 
+     */
     addTitle(text) {
         const title = document.createElement('p');
         title.innerText = text;
@@ -34,6 +54,9 @@ export class Inspector {
         return title;
     }
 
+    /**
+     * @param {string} title 
+     */
     addSection(title) {
         const box = document.createElement('div');
         box.className = "form-box";
@@ -42,6 +65,11 @@ export class Inspector {
         return box;
     }
 
+    /**
+     * @param {string} title 
+     * @param {()} callback 
+     * @param {*} section 
+     */
     addButton(title, callback, section) {
         const btn = document.createElement('button');
         btn.innerText = title ? title : "";
@@ -50,9 +78,16 @@ export class Inspector {
         if(!section)
             section = this.container;
         section.appendChild(btn);
+        return btn;
     }
 
-    createField(def, currentValue, onChange, section) { // TODO add uint, restrict float input for int fields?
+    /**
+     * @param {InspectorFieldDefinition} def 
+     * @param {*} currentValue 
+     * @param {(val: *)} onChange 
+     * @param {HTMLElement} section 
+     */
+    addField(def, currentValue, onChange, section) { // TODO add uint, restrict float input for int fields?
         const wrapper = document.createElement('div');
         wrapper.className = "input-group";
 
@@ -72,7 +107,10 @@ export class Inspector {
         }
         input.classList.add("form-input");
 
-        // Function used to get this field's current value
+        /**
+         * Get the latest value from the field input
+         * @returns {*}
+         */
         let getValue = () => {return null};
 
         // Add input based on value type
@@ -120,7 +158,11 @@ export class Inspector {
                     return real_kvs;
                 }
 
-                // Create row for label, value, minus button
+                /**
+                 * Create a row for label, value, and minus button
+                 * @param {string} k 
+                 * @param {*} v 
+                 */
                 const createKv = (k, v) => { //TODO fix spacing/styles
                     const row = document.createElement('div');
                     row.style.display = "flex";
@@ -199,7 +241,7 @@ export class Inspector {
                 break;
 
             default:
-                getValue = () => {return input.value};
+                getValue = () => { return input.value };
                 input.type = 'text';
                 break;
         }
@@ -222,15 +264,24 @@ export class Inspector {
         return { wrapper, getValue };
     }
 
+    /**
+     * Populate the form with properties of a given widget
+     * @param {Widget} widget 
+     */
     inspectWidget(widget) {
+        /** @type {typeof Widget} */
         const widgetClass = widget.constructor;
 
         this.clear();
-        this.addTitle(widgetClass.displayName);
+        this.addTitle(widget.gridElem.title);
 
-        // Helper to widget config related fields
+        /**
+         * Helper to add widget config related fields
+         * @param {InspectorFieldDefinition} field 
+         * @param {HTMLElement} section 
+         */
         const createConfigField = (field, section) => {
-            this.createField(field, widget.config[field.name], (newVal) => {
+            this.addField(field, widget.config[field.name], (newVal) => {
                 widget.config[field.name] = newVal;
                 widget.applyConfig(); // Visual update
             }, section);
@@ -240,6 +291,10 @@ export class Inspector {
             const tagSection = this.addSection();
             const tagTypedFieldsContainer = document.createElement('div');
 
+            /**
+             * Helper to create tag-dependent fields
+             * @param {TagListObject} tag 
+             */
             const createTagTypedFields = (tag) => {
                 tagTypedFieldsContainer.innerHTML = "";
 
@@ -261,7 +316,7 @@ export class Inspector {
             });
             const tagOptions = compatibleTags.map(tag => ({ value: tag.external_id, label: Inspector.getTagLabel(tag) }));
 
-            this.createField({ label: "Control Tag", type: "select", options: tagOptions }, widget.tag?.external_id, (newVal) => {
+            this.addField({ label: "Control Tag", type: "select", options: tagOptions }, widget.tag?.external_id, (newVal) => {
                 widget.tag = compatibleTags.find(tag => tag.external_id === newVal);
                 widget.applyConfig();
                 createTagTypedFields(newVal); // Update the tag based fields
@@ -278,21 +333,23 @@ export class Inspector {
 
         const defaultFieldsSection = this.addSection();
         widgetClass.defaultFields.forEach(field => { createConfigField(field, defaultFieldsSection) });
-
-        //TODO add placeholder values?
     }
 
+    /**
+     * Populate the form with properties of a given dashboard
+     * @param {Dashboard} dashboard 
+     */
     inspectDashboard(dashboard) { 
         this.clear();
         const title = this.addTitle(dashboard.alias);
         const dashboardSection = this.addSection();
 
-        this.createField({ label: "Dashboard Name", type: "text" }, dashboard.newAlias, (value) => {dashboard.newAlias = value}, dashboardSection);
-        this.createField({ label: "Description", type: "text" }, dashboard.description, (value) => {dashboard.description = value}, dashboardSection);
+        this.addField({ label: "Dashboard Name", type: "text" }, dashboard.newAlias, (value) => {dashboard.newAlias = value}, dashboardSection);
+        this.addField({ label: "Description", type: "text" }, dashboard.description, (value) => {dashboard.description = value}, dashboardSection);
 
         const dashboardPropertiesSection = this.addSection();
 
-        this.createField({ label: "Columns", type: "int" }, dashboard.canvasGridStack.getColumn(), (value) => {
+        this.addField({ label: "Columns", type: "int" }, dashboard.canvasGridStack.getColumn(), (value) => {
             dashboard.setColumnCount(value);
         }, dashboardPropertiesSection);
 
@@ -313,28 +370,35 @@ export class Inspector {
         }, ioSection);
     }
 
+    /**
+     * Populate with globally reaching form
+     */
     inspectGlobal() {
         this.clear();
         this._formCreateTag();
         this._formCreateAlarm();
     }
 
-    _formCreateTag() { //TODO i wonder if the options map should be a function, standardized in the API
+    _formCreateTag() {
         this.addTitle("New Tag");
 
         const tagSection = this.addSection();
-        const alias = this.createField({ label: "Tag Name", type: "text" }, "", null, tagSection);
-        const description = this.createField({ label: "Description (optional)", type: "text" }, "", null, tagSection)
+        const alias = this.addField({ label: "Tag Name", type: "text" }, "", null, tagSection);
+        const description = this.addField({ label: "Description (optional)", type: "text" }, "", null, tagSection)
 
         const locationSection = this.addSection();
         const deviceOptions = serverCache.devices.map(d => ({ value: d.alias, label: d.alias }));
-        const device = this.createField({ label: "Device", type: "select", options: deviceOptions }, "", null, locationSection);
-        const bitIndex = this.createField({ label: "Bit Index (0-15)", type: "int" }, 0, null, locationSection);
+        const device = this.addField({ label: "Device", type: "select", options: deviceOptions }, "", null, locationSection);
+        const bitIndex = this.addField({ label: "Bit Index (0-15)", type: "int" }, 0, null, locationSection);
 
         // Dynamic data type field - update according to channel type
         const dataTypeContainer = document.createElement('div');
         let getDataTypeValue = () => { return null };
 
+        /**
+         * Update the data types and bit index field if channel changes
+         * @param {ChannelType} channelValue 
+         */
         const onChannelChanged = (channelValue) => {
             dataTypeContainer.innerHTML = '';
             let dataTypeOptions = serverCache.tagOptions.data_types;
@@ -348,7 +412,10 @@ export class Inspector {
                 dataTypeValue = "bool";
             }
 
-            // Include the bit index field if it's a boolean value on registers
+            /**
+             * Include the bit index field if it's a boolean value on holding/input registers
+             *  @param {DataType} dataTypeValue
+             */ 
             const onDataTypeChanged = (dataTypeValue) => {
                 if (dataTypeValue === "bool" && ["hr", "ir"].includes(channelValue))
                     bitIndex.wrapper.classList.remove("hidden");
@@ -357,31 +424,34 @@ export class Inspector {
             }
             onDataTypeChanged(dataTypeValue);
 
-            const newField = this.createField({ label: "Data Type", type: "select", options: dataTypeOptions }, dataTypeValue, onDataTypeChanged, dataTypeContainer);
+            const newField = this.addField({ label: "Data Type", type: "select", options: dataTypeOptions }, dataTypeValue, onDataTypeChanged, dataTypeContainer);
             getDataTypeValue = newField.getValue;
         }
         
         const channelOptions = serverCache.tagOptions.channels.map(o => ({ value: o.value, label: o.label }));
-        const channel = this.createField({ label: "Channel", type: "select", options: channelOptions }, "", onChannelChanged, locationSection);
+        const channel = this.addField({ label: "Channel", type: "select", options: channelOptions }, "", onChannelChanged, locationSection);
         onChannelChanged() // Add data type field
         locationSection.appendChild(dataTypeContainer);
-        const address = this.createField({ label: "Address", type: "int", 
+        const address = this.addField({ label: "Address", type: "int", 
                 description: "The starting address of the value to read or write. 0-indexed." }, 
             0, null, locationSection);
+
         locationSection.appendChild(bitIndex.wrapper); // Move bit index field
 
-        //const readAmount = this.createField({label: "Read Amount", type: "int"}, 1, null, tagSection)
+        //const readAmount = this.addField({label: "Read Amount", type: "int"}, 1, null, tagSection)
         const historySection = this.addSection();
-        const historyRetention = this.createField({ label: "History Retention (Seconds)", type: "int", 
+        const historyRetention = this.addField({ label: "History Retention (Seconds)", type: "int", 
                 description: "The maximum age of this tag's history entries. Use 0 for no history" },
             0, null, historySection
         );
-        const historyInterval = this.createField({ label: "History Write Interval (Seconds)", type: "int", 
+        const historyInterval = this.addField({ label: "History Write Interval (Seconds)", type: "int", 
                 description: "How long the server should wait before creating a new history entry. Use 0 for highest detail"}, 
             1, null, historySection
         );
         
-        // Post values to server
+        /**
+         * Post tag configuration to the server
+         */
         const tagSubmit = async () => {
             const payload = {
                 alias: alias.getValue(),
@@ -411,14 +481,17 @@ export class Inspector {
     _formCreateAlarm() {
         this.addTitle("New Alarm");
         const alarmSection = this.addSection();
-        const alias = this.createField({ label: "Alarm Name", type: "text" }, "", null, alarmSection);
+        const alias = this.addField({ label: "Alarm Name", type: "text" }, "", null, alarmSection);
 
-        // Dynamic trigger value and operator field - update according to tag type
         const triggerContainer = document.createElement('div'); 
         const operatorContainer = document.createElement('div');
         let getTriggerValue = () => null;
         let getOperatorValue = () => null;
 
+        /**
+         * Update trigger value and operator field according to selected tag datatype
+         * @param {string} tagID 
+         */
         const onTagChanged = (tagID) => {
             triggerContainer.innerHTML = ''; 
             operatorContainer.innerHTML = '';
@@ -431,13 +504,13 @@ export class Inspector {
             // Show choices for trigger operator
             let operatorChoices = serverCache.alarmOptions.operator_choices;
             if(tag.data_type === "bool") 
-                operatorChoices = operatorChoices.filter(t => {return t.value === "equals"});
+                operatorChoices = operatorChoices.filter(t => { return t.value === "equals" });
 
             // Create an input with the same value type as the selected tag
             const fieldType = Inspector.getFieldType(tag.data_type);
 
-            const newOperatorField = this.createField({ label: "Operator", type: "select", options: operatorChoices}, "equals", null, operatorContainer);
-            const newTriggerField = this.createField({ label: "Trigger Value", type: fieldType, 
+            const newOperatorField = this.addField({ label: "Operator", type: "select", options: operatorChoices}, "equals", null, operatorContainer);
+            const newTriggerField = this.addField({ label: "Trigger Value", type: fieldType, 
                     description: "The value to compare with for triggering the alarm" }, 
                 "", null, triggerContainer
             );
@@ -447,21 +520,22 @@ export class Inspector {
         }
 
         const tagOptions = serverCache.tags.map(tag => ({ value: tag.external_id, label: Inspector.getTagLabel(tag)}));
-        const tag = this.createField({ label: "Control Tag", type: "select", options: tagOptions }, "", onTagChanged, alarmSection);
-        //onTagChanged()
+        const tag = this.addField({ label: "Control Tag", type: "select", options: tagOptions }, "", onTagChanged, alarmSection);
 
         alarmSection.appendChild(operatorContainer);
         alarmSection.appendChild(triggerContainer);
 
         const threatLevelOptions = serverCache.alarmOptions.threat_levels.map(a => ({ value: a.value, label: a.label }));
-        const threatLevel = this.createField({ label: "Threat Level", type: "select", options: threatLevelOptions }, "", null, alarmSection);
+        const threatLevel = this.addField({ label: "Threat Level", type: "select", options: threatLevelOptions }, "", null, alarmSection);
 
-        const message = this.createField({ label: "Message", type: "text", 
+        const message = this.addField({ label: "Message", type: "text", 
                 description: "The message to send to subscribers when the alarm activates" }, 
             "", null, alarmSection
         );
 
-        // Post values to server
+        /**
+         * Post alarm configuration to the server
+         */
         const alarmSubmit = async () => {
             const payload = {
                 alias: alias.getValue(),

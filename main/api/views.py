@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.decorators import action
-from .serializers import TagDetailSerializer, TagDropdownSerializer, TagCreateSerializer, TagUpdateSerializer, TagValueSerializer, TagWriteRequestSerializer, TagHistoryEntrySerializer
+from .serializers import TagDropdownSerializer, TagCreateSerializer, TagUpdateSerializer, TagValueSerializer, TagWriteRequestSerializer, TagHistoryEntrySerializer
 from .serializers import AlarmConfigSerializer, AlarmConfigDropdownSerializer, AlarmConfigCreateSerializer, ActivatedAlarmSerializer
 from .serializers import DashboardDropdownSerializer, DashboardSerializer, DashboardWidgetSerializer, DashboardWidgetBulkSerializer
 from .serializers import DeviceSerializer, DeviceDropdownSerializer
@@ -56,7 +56,6 @@ class TagViewSet(ModelViewSet):
     max_count = 999
     serializers = {
         "list": TagDropdownSerializer,
-        "retrieve": TagDetailSerializer,
         "create": TagCreateSerializer,
         "update": TagUpdateSerializer,
         "partial_update": TagUpdateSerializer,
@@ -73,7 +72,7 @@ class TagViewSet(ModelViewSet):
         return qs
     
     def get_serializer_class(self):
-        return self.serializers.get(self.action) or TagDetailSerializer
+        return self.serializers.get(self.action)
 
     def perform_create(self, serializer):
         if Tag.objects.filter(owner=self.request.user).count() > self.max_count:

@@ -1,40 +1,53 @@
 import { WidgetRegistry } from "./widgets.js";
 import { TagListener } from "./tag_listener.js";
 import { GridStack } from 'https://cdn.jsdelivr.net/npm/gridstack@12.3.3/+esm'
-import { postServer } from "./util.js";
-import { refreshData } from "./global.js";
+import { refreshData, postServer, serverCache } from "./global.js";
 import { Inspector } from "./inspector.js";
-import { serverCache } from "./global.js";
+/** @import { DashboardWidgetInfoObject, DashboardConfigObject } from "./types.js" */
+/** @import { Widget } from "./widgets.js" */
 
-class Dashboard {
+/**
+ * The main class for a dashboard page which handles Widget, TagListener, and Inspector classes 
+ */
+export class Dashboard {
     constructor() {
+        /** @type {boolean} */
         this.editMode = false;
+
+        /** @type {boolean} */
         this.isDirty = false;
+
+        /** @type {Widget | null} */
         this.selectedWidget = null;
 
-        this.sidebar = document.getElementById('editor-sidebar');
-        this.widgetGrid = document.getElementById('dashboard-grid');
-        this.editButton = document.getElementById('edit-button');
-        this.viewButton = document.getElementById('view-button');
-        this.creatorItems = document.getElementById('palette');
-        this.inspectButton = document.getElementById('inspect-button');
-        this.tagButton = document.getElementById('tag-button');
-        this.aliasElem = document.getElementById('dashboard-alias');
-        this.fileInput = document.getElementById('importFile');
-        //TODO maybe have a metadata dict which contains all the stuff?
-        this.alias = document.getElementById('dashboard-container').dataset.alias; // Set by Django
-        this.newAlias = this.alias; //TODO? used for keeping the desired new name before saving
-        this.description = document.getElementById('dashboard-container').dataset.description;
-        const columnCount = parseInt(document.getElementById('dashboard-container').dataset.columns);
-
+        /** @type {TagListener} The WebSocket listener to register Widgets to */
         this.listener = new TagListener();
+
+        /** @type {Inspector} */
         this.inspector = new Inspector(document.getElementById('inspector-form'));
+
+        /** @type {Inspector} */
         this.tagForm = new Inspector(document.getElementById('tag-form'));
         this.tagForm.inspectGlobal();
-                
+
+        //TODO maybe have a metadata dict which contains all the stuff? 
+        const dashboardMeta = document.getElementById('dashboard-container').dataset // Set by Django
+
+        /** @type {string} */
+        this.alias = dashboardMeta.alias;
+
+        this.newAlias = this.alias; //TODO? used for keeping the desired new name before saving
+
+        /** @type {string} */
+        this.description = dashboardMeta.description;
+
+        // Elements
+        this.widgetGrid = document.getElementById('dashboard-grid');
+        this.editButton = document.getElementById('edit-button');
+
         // Init
         this._setupEvents();
-        this._setupGridStack(columnCount);
+        this._setupGridStack(parseInt(dashboardMeta.columns));
         this.load();
     }
 
@@ -64,18 +77,16 @@ class Dashboard {
 
         // Buttons
         this.editButton.addEventListener('click', () => {
-            this.toggleEdit(true);
-        });
-        this.viewButton.addEventListener('click', () => {
-            this.toggleEdit(false);
+            this.toggleEdit(!this.editMode);
         });
 
         // Import file
-        this.fileInput.addEventListener("change", async (e) => {
+        const fileInput = document.getElementById('importFile');
+        fileInput.addEventListener("change", async (e) => {
             const file = e.target.files[0];
             if(file)
                 await this.importFile(file);
-            this.fileInput.value = "";
+            fileInput.value = "";
         });
 
         // Window events
@@ -91,8 +102,14 @@ class Dashboard {
         });
     }
 
+    /**
+     * @param {number} columnCount 
+     */
     _setupGridStack(columnCount) {
-        // Initial settings
+        /** 
+         * The dashboard's GridStack instance
+         * @type {GridStack} 
+         */
         this.canvasGridStack = GridStack.init({
             staticGrid: true, 
             column: columnCount,
@@ -109,15 +126,16 @@ class Dashboard {
         // Handle drag and drop
         this.canvasGridStack.on('added change', (event, items) => {
             items.forEach(item => {
+                /** @type {Widget} */
                 let widget = item.el.widgetInstance;
                 if (!widget) {
                     const type = item.el.dataset.type; // Set by Django
                     widget = new WidgetRegistry[type](item.el);
                 }
-                widget.config["position_x"] = item.x;
-                widget.config["position_y"] = item.y;
-                widget.config["scale_x"] = item.w;
-                widget.config["scale_y"] = item.h;
+                widget.config.position_x = item.x;
+                widget.config.position_y = item.y;
+                widget.config.scale_x = item.w;
+                widget.config.scale_y = item.h;
             });
             if(this.editMode) {
                 this.isDirty = true;
@@ -125,12 +143,13 @@ class Dashboard {
         });
 
         // Handle shift-dragging
+        /** @type {Widget | null} */
         let newWidget = null;
 
         this.canvasGridStack.on('dragstart', (event, el) => {
             if (event.shiftKey && el && el.widgetInstance) {
                 const config = JSON.parse(JSON.stringify(el.widgetInstance.config));
-                config["locked"] = true; 
+                config.locked = true; 
 
                 this.canvasGridStack.batchUpdate();
                 newWidget = this.createWidget(el.dataset.type, el.widgetInstance.tag, config);
@@ -141,7 +160,7 @@ class Dashboard {
 
         this.canvasGridStack.on('dragstop', (event, el) => {
             if(newWidget) {
-                newWidget.config["locked"] = false; //dumb
+                newWidget.config.locked = false; //dumb
                 newWidget.applyConfig();
             }
         });
@@ -160,6 +179,10 @@ class Dashboard {
         this.updateSquareCells();
     }
 
+    /**
+     * Populate the dashboard with new widgets from the given data
+     * @param {DashboardWidgetInfoObject[]} widgetData 
+     */
     async setupWidgets(widgetData) {
         if(!this.canvasGridStack) {
             console.error("Gridstack not initialized");
@@ -178,6 +201,12 @@ class Dashboard {
         });
     }
 
+    /**
+     * Creates a Widget instance of the provided type with a new GridStack element and adds it to the dashboard
+     * @param {string} typeName 
+     * @param {TagListObject} tag 
+     * @param {Object} config 
+     */
     createWidget(typeName, tag, config) {
         // Copy widget contents from the palette populated by Django
         const palette = document.getElementById('palette');
@@ -185,6 +214,7 @@ class Dashboard {
         const gridElem = gridPaletteElem.cloneNode(true);
         //gridStackNewItem.title = wData.tag_description; //TODO get description of tag
 
+        /** @type {typeof Widget} */
         const widgetClass = WidgetRegistry[typeName];
 
         if(widgetClass) {
@@ -207,6 +237,10 @@ class Dashboard {
         }
     }
 
+    /**
+     * Enable or disable edit mode
+     * @param {boolean} flag
+     */
     toggleEdit(flag) {
         //TODO supress warnings? (no connection, stale value indicators)
         if(flag === this.editMode)
@@ -218,8 +252,7 @@ class Dashboard {
 
         if(this.editMode) {
             document.body.classList.add('edit-mode');
-            this.viewButton.classList.remove('hidden');
-            this.editButton.classList.add('hidden');
+            this.editButton.innerText = "View Dashboard";
             
             this.canvasGridStack.setStatic(false); // Enable Drag/Drop
 
@@ -230,8 +263,7 @@ class Dashboard {
         }
         else {
             document.body.classList.remove('edit-mode');
-            this.viewButton.classList.add('hidden');
-            this.editButton.classList.remove('hidden');
+            this.editButton.innerText = "Edit Dashboard";
 
             this.canvasGridStack.setStatic(true);
 
@@ -249,6 +281,11 @@ class Dashboard {
         }, 500);
     }
 
+    /**
+     * Highlight and inspect the widget, or deselect and inspect the dashboard if already selected
+     * @param {Widget} widget 
+     * @returns 
+     */
     selectWidget(widget) {
         if(this.selectedWidget) {
             this.selectedWidget.gridElem.classList.remove("selected");
@@ -262,13 +299,16 @@ class Dashboard {
         if(widget) {
             widget.gridElem.classList.add("selected")
             this.inspector.inspectWidget(widget);
-            activateTab(this.inspectButton);
+            activateTab(document.getElementById('inspect-button'));
         }
         else {
             this.inspector.inspectDashboard(this);
         }
     }
 
+    /**
+     * Resize the GridStack cell width to maintain 1:1 aspect ratio
+     */
     updateSquareCells() {
         const gridEl = this.canvasGridStack.el;
         const width = gridEl.clientWidth;
@@ -280,12 +320,150 @@ class Dashboard {
         this.canvasGridStack.onResize();
     }
 
+    /**
+     * @param {number} val 
+     */
     setColumnCount(val) {
         this.canvasGridStack.column(val);
         this.updateSquareCells();
     }
 
-    async capturePreview() {
+    /**
+     * Fetch and apply widget data from the server based on this dashboard's name
+     */
+    async load() {
+        try {
+            document.getElementById('loading-spinner').classList.remove('hidden');
+
+            // Get widget info from server
+            const response = await fetch(`/api/dashboard-widgets/?dashboard=${this.alias}`);
+            if(!response.ok) throw new Error("Failed to load widgets");
+            
+            const widgets = await response.json();
+
+            // Set up recieved info
+            await this.setupWidgets(widgets);
+
+            if(widgets.length === 0) {
+                this.toggleEdit(true);
+            }
+            else {
+                this._getWidgets().forEach(widget => {
+                    this.listener.registerWidget(widget);
+                });
+                await this.listener.connect();
+            }
+        } 
+        catch (err) {
+            console.error(err);
+            this.widgetGrid.innerHTML = `<div class="error">Error loading dashboard: ${err.message}</div>`;
+        } 
+        finally {
+            document.getElementById('loading-spinner').classList.add('hidden');
+        }
+    }
+
+    /** 
+     * Update the server with new widget config and screenshot
+     */
+    async save() {
+        
+        const formData = new FormData();
+
+        // Add meta
+        const config = this._getConfig();
+
+        formData.append('alias', this.newAlias);
+        formData.append('description', config.description);
+        formData.append('column_count', config.column_count);
+        formData.append('widgets', JSON.stringify(config.widgets));
+
+        // Get image data
+        const imageBlob = await this._getPreview();
+        if (imageBlob) {
+            formData.append('preview_image', imageBlob, 'preview.jpg');
+        }
+
+        postServer(`/api/dashboards/${this.alias}/save-data/`, formData, (data) => {
+            this.isDirty = false;
+            this.alias = this.newAlias;
+            const aliasElem = document.getElementById('dashboard-alias');
+            aliasElem.innerText = this.newAlias;
+            aliasElem.title = this.description;
+            history.pushState({}, "", `/dashboard/${this.newAlias}/`); // Change URL
+            alert("Dashboard Saved!");
+        });
+    }
+
+    /** 
+     * Download dashboard configuration as .json
+     */
+    exportFile() {
+        try {
+            const json = JSON.stringify(this._getConfig(), null, 2);
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${this.alias}-config.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } 
+        catch (err) {
+            alert("Error exporting configuration: " + err.message);
+        }
+    }
+
+    /**
+     * Set up the dashboard with .json
+     * @param {File} file 
+     */
+    async importFile(file) {
+        try {
+            const text = await file.text();
+            const config = JSON.parse(text);
+            const confirm = window.confirm(`Replace all widgets with ${config.widgets.length} new widgets?`)
+            if(confirm) {
+                this.setColumnCount(config.column_count);
+                this.setupWidgets(config.widgets);
+            }
+        } 
+        catch (err) {
+            alert("Error importing configuration: " + err.message);
+        }
+    }
+
+    /**
+     * @returns {DashboardConfigObject} All data needed to recreate this dashboard
+     */
+    _getConfig() {
+        return {
+            alias: this.alias,
+            description: this.description,
+            column_count: this.canvasGridStack.getColumn(),
+            widgets: this._getWidgets().map(widget => ({ //TODO widget method or nah?
+                tag: widget.tag?.external_id || null,
+                widget_type: widget.gridElem.dataset.type,
+                config: widget.config
+            }))
+        };
+    }
+
+    /**
+     * @returns {Widget[]}
+     */
+    _getWidgets() {
+        return Array.from(this.widgetGrid.querySelectorAll('.grid-stack-item'))
+            .map(item => item.widgetInstance)
+            .filter(Boolean);
+    }
+
+    /**
+     * Returns an image of the current dashboard. Enters screenshot mode for the capture then restores when done
+     * @returns {Promise<Blob>}
+     */
+    async _getPreview() {
         const CAPTURE_WIDTH = 1300; 
         const ASPECT_RATIO = 260 / 160; 
         const CAPTURE_HEIGHT = CAPTURE_WIDTH / ASPECT_RATIO; // Result: 800px
@@ -334,119 +512,11 @@ class Dashboard {
             document.body.classList.remove("screenshot-mode");
         }
     }
-
-    async load() {
-        try {
-            document.getElementById('loading-spinner').classList.remove('hidden');
-
-            // Get widget info from server
-            const response = await fetch(`/api/dashboard-widgets/?dashboard=${this.alias}`);
-            if(!response.ok) throw new Error("Failed to load widgets");
-            
-            const widgets = await response.json();
-
-            // Set up recieved info
-            await this.setupWidgets(widgets);
-
-            if(widgets.length === 0) {
-                this.toggleEdit();
-            }
-            else {
-                this._getWidgets().forEach(widget => {
-                    this.listener.registerWidget(widget);
-                });
-                await this.listener.connect();
-            }
-        } 
-        catch (err) {
-            console.error(err);
-            this.widgetGrid.innerHTML = `<div class="error">Error loading dashboard: ${err.message}</div>`;
-        } 
-        finally {
-            document.getElementById('loading-spinner').classList.add('hidden');
-        }
-    }
-
-    async save() {
-        
-        const formData = new FormData();
-
-        // Add meta
-        const meta = this._getMeta();
-
-        formData.append('alias', this.newAlias);
-        formData.append('description', meta.description);
-        formData.append('column_count', meta.columns);
-        formData.append('widgets', JSON.stringify(meta.widgets));
-
-        // Get image data
-        const imageBlob = await this.capturePreview();
-        if (imageBlob) {
-            formData.append('preview_image', imageBlob, 'preview.jpg');
-        }
-
-        postServer(`/api/dashboards/${this.alias}/save-data/`, formData, (data) => {
-            this.isDirty = false;
-            this.alias = this.newAlias;
-            this.aliasElem.innerText = this.newAlias;
-            this.aliasElem.title = this.description;
-            history.pushState({}, "", `/dashboard/${this.newAlias}/`);
-            alert("Dashboard Saved!");
-        });
-    }
-
-    exportFile() {
-        try {
-            const json = JSON.stringify(this._getMeta(), null, 2);
-            const blob = new Blob([json], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${this.alias}-config.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        } 
-        catch (err) {
-            alert("Error exporting configuration: " + err.message);
-        }
-    }
-
-    async importFile(file) {
-        try {
-            const text = await file.text();
-            const config = JSON.parse(text);
-            const confirm = window.confirm(`Replace all widgets with ${config.widgets.length} new widgets?`)
-            if(confirm) {
-                this.setColumnCount(config.columns);
-                this.setupWidgets(config.widgets);
-            }
-        } 
-        catch (err) {
-            alert("Error importing configuration: " + err.message);
-        }
-    }
-
-    _getMeta() {
-        return {
-            alias: this.alias,
-            description: this.description,
-            columns: this.canvasGridStack.getColumn(),
-            widgets: this._getWidgets().map(widget => ({ //TODO widget method or nah?
-                tag: widget.tag?.external_id || null,
-                widget_type: widget.gridElem.dataset.type,
-                config: widget.config
-            }))
-        };
-    }
-
-    _getWidgets() {
-        return Array.from(this.widgetGrid.querySelectorAll('.grid-stack-item'))
-            .map(item => item.widgetInstance)
-            .filter(Boolean);
-    }
 }
 
+/** 
+ * @param {HTMLButtonElement} btn 
+ */
 function activateTab(btn) {
     document.querySelectorAll('.tab-buttons button').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));

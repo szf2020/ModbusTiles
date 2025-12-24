@@ -218,16 +218,6 @@ input:checked + .switch_slider:before {
     
     word-wrap: break-word;
     white-space: pre-wrap;
-
-    font-size: clamp(
-        0.75rem,
-        calc(
-        var(--text-scale)
-        * var(--width-boost)
-        * 1cqh
-        ),
-        5rem
-    );
 }
 
 /* --- Number Input Widget ---*/

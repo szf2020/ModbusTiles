@@ -1,5 +1,8 @@
 import { postServer } from "./util.js";
 
+/**
+ * Register a new dashboard on the server, then redirect to it
+ */
 function createDashboard() {
     const payload = {
         alias: "",
