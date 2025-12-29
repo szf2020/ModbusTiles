@@ -1,3 +1,4 @@
+import { requestServer } from "./global.js";
 /** @import { TagValueObject } from "./types.js" */
 /** @import { Widget } from "./widgets.js" */
 
@@ -49,9 +50,7 @@ export class TagListener {
 
             // main.consumers.tag_update
             if (payload.type === "tag_update") {
-                /** @type {TagValueObject[]} */
-                const updates = payload.data;
-                updates.forEach(update => {
+                payload.data.forEach(update => {
                     this.onUpdate(update);
                 });
             }
@@ -71,21 +70,11 @@ export class TagListener {
         const tagIds = Object.keys(this.tagMap).join(",");
         if (tagIds.length === 0) return;
 
-        try {
-            const req = await fetch(`/api/values/?tags=${tagIds}`);
-
-            if (!req.ok) throw new Error("Batch fetch failed");
-
-            /** @type {TagValueObject[]} */
-            const response = await req.json();
+        await requestServer('/api/values/', 'GET', { tags: tagIds }, (response) => {
             response.forEach(update => {
                 this.onUpdate(update);
-            })
-
-        } 
-        catch (err) {
-            console.error("Fetching error:", err);
-        }
+            });
+        });
     }
 
     /**

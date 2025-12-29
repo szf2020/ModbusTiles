@@ -5,7 +5,7 @@
  * @type {ServerCacheObject} 
  */
 export const serverCache = {
-    tags: [],
+    tags: [], //TODO make this a map of external_id -> other info?
     devices: [],
     tagOptions: [],
     alarmOptions: [],
@@ -63,54 +63,69 @@ export function getCookie(name) {
 }
 
 /**
- * Send POST request with CSRFToken and payload at the given endpoint
+ * Send request with CSRFToken and payload at the given endpoint
  * @param {string} input 
+ * @param {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} method
  * @param {Object} payload 
  * @param {(data: Object) => any} successCallback Performed if a success response is recieved
  * @returns 
  */
-export async function postServer(input, payload, successCallback) {
+export async function requestServer(input, method, payload, successCallback) {
     const isFormData = payload instanceof FormData;
+    method = method.toUpperCase();
 
-    // Headers
     const headers = {
         'X-CSRFToken': getCookie('csrftoken')
     };
 
-    if (!isFormData) {
-        headers['Content-Type'] = 'application/json';
+    // Configuration object for fetch
+    const options = {
+        method: method,
+        headers: headers,
+    };
+
+    // Handle Body vs Query Params
+    if (method === 'GET' || method === 'HEAD') {
+        // If payload exists for GET, append it as query parameters
+        if (payload) {
+            const params = new URLSearchParams(payload).toString();
+            input += (input.includes('?') ? '&' : '?') + params;
+        }
+    } 
+    else {
+        // For POST, PUT, PATCH, etc., add the body
+        if (!isFormData) {
+            headers['Content-Type'] = 'application/json';
+        }
+        options.body = isFormData ? payload : JSON.stringify(payload);
     }
 
-    // Body
-    const body = isFormData ? payload : JSON.stringify(payload);
-
     try {
-        const response = await fetch(input, {
-            method: 'POST',
-            headers: headers,
-            body: body
-        });
+        const response = await fetch(input, options);
 
         if (response.ok) {
-            const data = await response.json();
-            if (successCallback) 
-                successCallback(data);
+            // Check if response has content before parsing JSON (important for DELETE usually)
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                const data = await response.json();
+                if (successCallback) successCallback(data);
+            } else if (successCallback) {
+                successCallback(null);
+            }
             return true;
         } 
         else {
-            // Try to parse error message, fallback to status text
+            // Error handling
             let errMsg = response.statusText;
             try {
                 const err = await response.json();
                 errMsg = JSON.stringify(err);
-            } catch (e) { /* ignore JSON parse error on 500s */ }
-            
+            } catch (e) { }
             alert("Error: " + errMsg);
         }
     } 
     catch (e) {
         console.error("Network or Logic Error:", e);
-        //alert("A network error occurred.");
     }
     return false;
 }

@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.decorators import action
-from .serializers import TagDropdownSerializer, TagCreateSerializer, TagUpdateSerializer, TagValueSerializer, TagWriteRequestSerializer, TagHistoryEntrySerializer
+from .serializers import TagSerializer, TagValueSerializer, TagWriteRequestSerializer, TagHistoryEntrySerializer
 from .serializers import AlarmConfigSerializer, AlarmConfigDropdownSerializer, AlarmConfigCreateSerializer, ActivatedAlarmSerializer
 from .serializers import DashboardDropdownSerializer, DashboardSerializer, DashboardWidgetSerializer, DashboardWidgetBulkSerializer
 from .serializers import DeviceSerializer, DeviceDropdownSerializer
@@ -53,14 +53,10 @@ class DeviceMetadataView(APIView):
 
 
 class TagViewSet(ModelViewSet):
-    max_count = 999
-    serializers = {
-        "list": TagDropdownSerializer,
-        "create": TagCreateSerializer,
-        "update": TagUpdateSerializer,
-        "partial_update": TagUpdateSerializer,
-    }
-    permission_classes = [IsAuthenticated]
+    lookup_field = 'external_id'
+    serializer_class = TagSerializer
+
+    user_max_count = 999
 
     def get_queryset(self):
         qs = Tag.objects.all()
@@ -70,15 +66,30 @@ class TagViewSet(ModelViewSet):
             qs = qs.filter(device__alias=device_alias)
 
         return qs
-    
-    def get_serializer_class(self):
-        return self.serializers.get(self.action)
 
     def perform_create(self, serializer):
-        if Tag.objects.filter(owner=self.request.user).count() > self.max_count:
+        if Tag.objects.filter(owner=self.request.user).count() > self.user_max_count:
             raise ValidationError("Max tags reached")
         
         serializer.save(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        tag: Tag = self.get_object()
+        user = self.request.user
+
+        if tag.owner != user and not user.is_staff:
+            raise PermissionDenied("You can only edit your own tags.")
+        else:
+            serializer.save()
+
+    def perform_destroy(self, instance):
+        tag: Tag = self.get_object()
+        user = self.request.user
+
+        if tag.owner != user and not user.is_staff:
+            raise PermissionDenied("You can only delete your own tags.")
+        else:
+            instance.delete()
 
 
 class TagMetadataView(APIView):
@@ -100,6 +111,15 @@ class TagWriteRequestViewSet(ModelViewSet):
     queryset = TagWriteRequest.objects.all()
     serializer_class = TagWriteRequestSerializer
     permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        tag = serializer.validated_data['tag']
+        user = self.request.user
+
+        if tag.owner != user and not user.is_staff:
+            raise PermissionDenied("You do not have permission to write to this tag.")
+
+        serializer.save()
 
     def update(self, request, *args, **kwargs):
         raise MethodNotAllowed("PUT/PATCH not allowed on TagWriteRequest")

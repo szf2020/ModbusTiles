@@ -204,7 +204,7 @@ async def _process_block(block: ReadBlock, client: ModbusBaseClient, context: Po
         return
     
     if rr.isError():
-        logger.error(f"Modbus error while reading block starting at {block.start}")
+        logger.error(f"Modbus error while reading block starting at {block.start} (Tags: {block.tags})")
         return
     
     if len(rr.registers) > 0:
@@ -236,19 +236,15 @@ async def _process_block(block: ReadBlock, client: ModbusBaseClient, context: Po
                     word_order=tag.device.word_order
                 )
                 # Handle bit-indexing
-                if tag.bit_index is not None:
-                    if tag.data_type != Tag.DataTypeChoices.BOOL:
-                        logger.error(f"Data type mismatch in {tag}: want to read bit {tag.bit_index} with type {tag.data_type}")
-                        continue
-                    else:
-                        values = bool((values >> tag.bit_index) & 1)
+                if tag.is_bit_indexed:
+                    values = bool((values >> tag.bit_index) & 1)
 
             elif len(rr.bits) > 0:
                 values = raw_slice if tag.read_amount > 1 else raw_slice[0]
 
             # Update tag
             if tag.current_value != values:
-                tag.current_value = values #TODO
+                tag.current_value = values
                 context.updated_tags.append(tag)
             
             tag.last_updated = timezone.now()
@@ -287,6 +283,7 @@ async def _process_writes(client, device: Device):
 
         except Exception as e:
             logger.error(f"Write failed for {req.tag}: {e}") #TODO mark write status as failed
+            #TODO 
 
         # Mark as done
         req.processed = True
@@ -317,21 +314,17 @@ async def _write_value(client: ModbusBaseClient, tag: Tag, values):
     # Write the list to the device registers
     match tag.channel:
         case Tag.ChannelChoices.HOLDING_REGISTER:
-            # Normal direct write
-            if tag.bit_index is None:                
-                registers = client.convert_to_registers(values, data_type=_get_modbus_datatype(client, tag), word_order=tag.device.word_order)
-                result = await client.write_registers(tag.address, registers, device_id=tag.unit_id)
-            
-            # Mask write (bitfield)
-            elif tag.data_type == Tag.DataTypeChoices.BOOL:
+            # Bitmask write
+            if tag.is_bit_indexed:           
                 bit_mask = 1 << tag.bit_index
                 and_mask = 0xFFFF ^ bit_mask
                 or_mask = bit_mask if values[0] else 0x0000
                 result = await client.mask_write_register(address=tag.address, and_mask=and_mask, or_mask=or_mask, device_id=tag.unit_id)
 
+            # Normal direct write
             else:
-                logger.error(f"Data type mismatch in {tag}: want to write bit {tag.bit_index} with type {tag.data_type}")
-                return
+                registers = client.convert_to_registers(values, data_type=_get_modbus_datatype(client, tag), word_order=tag.device.word_order)
+                result = await client.write_registers(tag.address, registers, device_id=tag.unit_id)
 
         case Tag.ChannelChoices.COIL:
             result = await client.write_coils(tag.address, values, device_id=tag.unit_id)

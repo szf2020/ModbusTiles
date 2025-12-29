@@ -1,4 +1,4 @@
-import { postServer } from "./global.js";
+import { requestServer } from "./global.js";
 /** @import { TagListObject, TagValueObject, AlarmConfigListObject, InspectorFieldDefinition, ChannelType, DataType } from "./types.js" */
 
 /**
@@ -218,7 +218,7 @@ class InputWidget extends Widget {
             return;
         }
 
-        const submitted = await postServer(`/api/write-requests/`, { tag: this.tag.external_id, value: value });
+        const submitted = await requestServer(`/api/write-requests/`, 'POST', { tag: this.tag.external_id, value: value });
         this.elem.classList.add('pending'); //TODO schedule remove?
 
         if(submitted)
@@ -248,7 +248,7 @@ class InputWidget extends Widget {
             // Value changed successfully!
             flashBool(this.elem, true);
             this.lastSubmitted = null;
-        }
+        } //TODO flash bool if not the correct value? would need to make it so the server sends the tag update if failed
         this.elem.classList.remove('pending');
     }
 }

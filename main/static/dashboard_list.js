@@ -1,4 +1,4 @@
-import { postServer } from "./util.js";
+import { requestServer } from "./global.js";
 
 /**
  * Register a new dashboard on the server, then redirect to it
@@ -8,7 +8,7 @@ function createDashboard() {
         alias: "",
         description: "",
     };
-    postServer("/api/dashboards/", payload, (data) => {
+    requestServer("/api/dashboards/", 'POST', payload, (data) => {
         window.location.href = "/dashboard/" + data.alias;
     });
 }

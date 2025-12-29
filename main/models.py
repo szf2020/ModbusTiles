@@ -1,25 +1,28 @@
 import uuid
 import os
+import logging
 from datetime import timedelta
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-from django.utils.translation import gettext_lazy as _
 from typing import Self
 
+
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
 
 class Device(models.Model):
     """ Represents a single PLC that should be connected to via Modbus """
 
     class ProtocolChoices(models.TextChoices):
-        MODBUS_TCP = "tcp", _("Modbus TCP")
-        MODBUS_UDP = "udp", _("Modbus UDP")
-        MODBUS_RTU = "rtu", _("Modbus Serial")
+        MODBUS_TCP = "tcp", "Modbus TCP"
+        MODBUS_UDP = "udp", "Modbus UDP"
+        MODBUS_RTU = "rtu", "Modbus Serial"
 
     class WordOrderChoices(models.TextChoices):
-        BIG = "big", _("Big Endian")
-        LITTLE = "little", _("Little Endian")
+        BIG = "big", "Big Endian"
+        LITTLE = "little", "Little Endian"
 
     alias = models.SlugField(max_length=100, unique=True) #TODO regular string field?
     ip_address = models.GenericIPAddressField(default="127.0.0.1")
@@ -40,22 +43,22 @@ class Tag(models.Model):
     """ Represents a portion of data that should be read from a PLC """
 
     class ChannelChoices(models.TextChoices):
-        COIL = "coil", _("Coil")
-        DISCRETE_INPUT = "di", _("Discrete Input")
-        HOLDING_REGISTER = "hr", _("Holding Register")
-        INPUT_REGISTER = "ir", _("Input Register")
+        COIL = "coil", "Coil"
+        DISCRETE_INPUT = "di", "Discrete Input"
+        HOLDING_REGISTER = "hr", "Holding Register"
+        INPUT_REGISTER = "ir", "Input Register"
 
     class DataTypeChoices(models.TextChoices):
-        BOOL = "bool", _("Boolean")
-        INT16 = "int16", _("Signed Int16")
-        UINT16 = "uint16", _("Unsigned Int16")
-        INT32 = "int32", _("Signed Int32")
-        UINT32 = "uint32", _("Unsigned Int32")
-        INT64 = "int64", _("Signed Int64")
-        UINT64 = "uint64", _("Unsigned Int64")
-        FLOAT32 = "float32", _("Float32")
-        FLOAT64 = "float64", _("Float64")
-        STRING = "string", _("String")
+        BOOL = "bool", "Boolean"
+        INT16 = "int16", "Signed Int16"
+        UINT16 = "uint16", "Unsigned Int16"
+        INT32 = "int32", "Signed Int32"
+        UINT32 = "uint32", "Unsigned Int32"
+        INT64 = "int64", "Signed Int64"
+        UINT64 = "uint64", "Unsigned Int64"
+        FLOAT32 = "float32", "Float32"
+        FLOAT64 = "float64", "Float64"
+        STRING = "string", "String"
 
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name="tags")
     unit_id = models.PositiveIntegerField(default=1)
@@ -69,7 +72,7 @@ class Tag(models.Model):
     data_type = models.TextField(choices=DataTypeChoices.choices)
 
     address = models.PositiveIntegerField(default=0)
-    bit_index = models.PositiveSmallIntegerField(blank=True, null=True)
+    bit_index = models.PositiveSmallIntegerField(default=0)
 
     read_amount = models.PositiveIntegerField(default=1)
 
@@ -127,6 +130,13 @@ class Tag(models.Model):
         if entries:
             TagHistoryEntry.objects.bulk_create(entries)
             cls.objects.bulk_update([entry.tag for entry in entries], ['last_history_at'])
+
+    @property
+    def is_bit_indexed(self):
+        return self.data_type == Tag.DataTypeChoices.BOOL and self.channel in [
+                Tag.ChannelChoices.HOLDING_REGISTER, 
+                Tag.ChannelChoices.INPUT_REGISTER
+            ]
     
     def __str__(self):
         bit = f":{self.bit_index}" if self.bit_index is not None else ""
@@ -165,14 +175,14 @@ class AlarmConfig(models.Model):
     """ Maps a specific Tag value to a human-readable alarm """
 
     class ThreatLevelChoices(models.TextChoices):
-        LOW = "low", _("Low")
-        HIGH  = "high", _("High")
-        CRITICAL = "crit", _("Critical")
+        LOW = "low", "Low"
+        HIGH  = "high", "High"
+        CRITICAL = "crit", "Critical"
 
     class OperatorChoices(models.TextChoices):
-        EQUALS = "equals", _("Equals")
-        GREATER_THAN  = "greater_than", _("Greater Than")
-        LESS_THAN = "less_than", _("Less Than")
+        EQUALS = "equals", "Equals"
+        GREATER_THAN  = "greater_than", "Greater Than"
+        LESS_THAN = "less_than", "Less Than"
     
     ALARM_PRIORITY = {
         ThreatLevelChoices.LOW: 1,
@@ -236,10 +246,13 @@ class AlarmConfig(models.Model):
                 # Deactivate current alarm for this tag
                 current.is_active = False
                 deactivate.append(current)
+                logger.info(f"Alarm Deactivated: {current.config}")
 
             if winning and (not current or current.config_id != winning.id):
                 # Activate the alarm
-                activate.append(ActivatedAlarm(config=winning, is_active=True))
+                alarm = ActivatedAlarm(config=winning, is_active=True)
+                activate.append(alarm)
+                logger.info(f"Alarm Activated: {winning}")
 
         ActivatedAlarm.objects.bulk_update(deactivate, ["is_active"])
         ActivatedAlarm.objects.bulk_create(activate)
@@ -352,19 +365,19 @@ class DashboardWidget(models.Model):
     """ An element on a dashboard used to interact with a tag """
 
     class WidgetTypeChoices(models.TextChoices):
-        LED = "led", _("LED Indicator")
-        BOOL_LABEL = "bool_label", _("Boolean Label")
-        MULTI_LABEL = "multi_label", _("Multi-Value Label")
-        NUMBER_LABEL = "number_label", _("Number Label")
-        NUMBER_INPUT = "number_input", _("Number Input")
-        LINE_CHART = "chart", _("Time-Series Chart")
-        BUTTON = "button", _("Button")
-        LABEL = "label", _("Text Label")
-        SWITCH = "switch", _("Switch")
-        METER = "meter", _("Meter")
-        SLIDER = "slider", _("Slider")
-        DROPDOWN = "dropdown", _("Dropdown")
-        GAUGE = "gauge", _("Radial Gauge")
+        LED = "led", "LED Indicator"
+        BOOL_LABEL = "bool_label", "Boolean Label"
+        MULTI_LABEL = "multi_label", "Multi-Value Label"
+        NUMBER_LABEL = "number_label", "Number Label"
+        NUMBER_INPUT = "number_input", "Number Input"
+        LINE_CHART = "chart", "Time-Series Chart"
+        BUTTON = "button", "Button"
+        LABEL = "label", "Text Label"
+        SWITCH = "switch", "Switch"
+        METER = "meter", "Meter"
+        SLIDER = "slider", "Slider"
+        DROPDOWN = "dropdown", "Dropdown"
+        GAUGE = "gauge", "Radial Gauge"
 
     dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, related_name="widgets")
 

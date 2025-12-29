@@ -2,6 +2,7 @@
 /** @typedef {'bool' | 'int16' | 'uint16' | 'int32' | 'uint32' | 'int64' | 'uint64' | 'float32' | 'float64' | 'string'} DataType */
 /** @typedef {'low' | 'high' | 'crit'} ThreatLevel */
 /** @typedef {'tcp' | 'udp' | 'serial'} DeviceProtocol */
+/** @typedef {'bool' | 'int' | 'number' | 'text' | 'color' | 'select' | 'enum'} InspectorDataType */
 
 /**
  * Object recieved from `api.serializers.AlarmConfigDropdownSerializer`
@@ -21,8 +22,9 @@
  */
 
 /**
- * Object recieved from `api.serializers.TagDropdownSerializer` through `/api/tags/`
+ * Object recieved from `api.serializers.TagSerializer` through `/api/tags/`
  * @typedef {Object} TagListObject
+ * @property {string} device The device alias
  * @property {string} external_id The UUID of the tag
  * @property {string} alias Human readable name (e.g. "Sump Level")
  * @property {string} description Longer description
@@ -30,6 +32,9 @@
  * @property {ChannelType} channel The register type
  * @property {number} address The 0-indexed starting register
  * @property {number} [bit_index] Optional bit index (0-15)
+ * @property {number} history_retention Number of seconds that the value is stored in the DB
+ * @property {number} history_interval Number of seconds between history value stores
+ * @property {boolean} is_active If the tag can read/write data
  */
 
 /**
@@ -88,8 +93,8 @@
 /** 
  * Defines a widget config property editable in the Inspector
  * @typedef {Object} InspectorFieldDefinition
- * @property {string} name Config attribute to read/write to
- * @property {string} [type] 'bool', 'int', 'float', 'number', 'color', 'select', 'enum'
+ * @property {string} [name] Widget config attribute to read/write to
+ * @property {InspectorDataType} type
  * @property {*} default The attribute to apply to the widget config if undefined
  * @property {string} label The text to display above the input
  * @property {string} [description] The html title to apply to the label

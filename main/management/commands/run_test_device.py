@@ -51,7 +51,6 @@ class Command(BaseCommand):
             tags = Tag.objects.filter(
                 is_active=True, 
                 channel__in=[Tag.ChannelChoices.INPUT_REGISTER, Tag.ChannelChoices.DISCRETE_INPUT],
-                bit_index=None, #TODO implement bit animating?
             ).select_related("device")
 
             for tag in tags:
@@ -63,11 +62,15 @@ class Command(BaseCommand):
                 time.sleep(1 / len(tags))
 
     def animate_tag(self, context: ModbusServerContext, tag: Tag):
+        if tag.is_bit_indexed:
+            return #TODO
+
         slave_id = tag.unit_id
         address = tag.address
         
         # Get type-matching value
         new_value = self.generate_random_value(tag)
+        #logger.info(f"{tag}: Setting new value {new_value}")
 
         # Write to server context
         if tag.channel == Tag.ChannelChoices.DISCRETE_INPUT:

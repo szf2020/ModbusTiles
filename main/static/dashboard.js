@@ -1,7 +1,7 @@
 import { WidgetRegistry } from "./widgets.js";
 import { TagListener } from "./tag_listener.js";
 import { GridStack } from 'https://cdn.jsdelivr.net/npm/gridstack@12.3.3/+esm'
-import { refreshData, postServer, serverCache } from "./global.js";
+import { refreshData, requestServer, serverCache } from "./global.js";
 import { Inspector } from "./inspector.js";
 /** @import { DashboardWidgetInfoObject, DashboardConfigObject } from "./types.js" */
 /** @import { Widget } from "./widgets.js" */
@@ -384,7 +384,7 @@ export class Dashboard {
             formData.append('preview_image', imageBlob, 'preview.jpg');
         }
 
-        postServer(`/api/dashboards/${this.alias}/save-data/`, formData, (data) => {
+        requestServer(`/api/dashboards/${this.alias}/save-data/`, 'POST', formData, (data) => {
             this.isDirty = false;
             this.alias = this.newAlias;
             const aliasElem = document.getElementById('dashboard-alias');

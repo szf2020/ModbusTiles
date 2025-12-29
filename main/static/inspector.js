@@ -1,5 +1,5 @@
-import { serverCache, refreshData, postServer } from "./global.js";
-/** @import { InspectorFieldDefinition, ChoiceObject, DataType, TagListObject, ChannelType } from "./types.js" */
+import { serverCache, requestServer } from "./global.js";
+/** @import { InspectorFieldDefinition, ChoiceObject, DataType, TagListObject, ChannelType, InspectorDataType } from "./types.js" */
 /** @import { Widget } from "./widgets.js" */
 /** @import { Dashboard } from "./dashboard.js" */
 
@@ -17,7 +17,7 @@ export class Inspector {
 
     /**
      * @param {DataType} dataType 
-     * @returns The relevant form type from a Tag's datatype
+     * @returns {InspectorDataType} The relevant form type from a Tag's datatype
      */
     static getFieldType(dataType) {
         if(dataType === "bool") 
@@ -39,6 +39,9 @@ export class Inspector {
         return `${tag.alias} (${tag.channel} ${tag.address}${bit})`;
     }
 
+    /**
+     * Remove all form contents
+     */
     clear() {
         this.container.innerHTML = '';
     }
@@ -82,186 +85,196 @@ export class Inspector {
     }
 
     /**
-     * @param {InspectorFieldDefinition} def 
-     * @param {*} currentValue 
-     * @param {(val: *)} onChange 
-     * @param {HTMLElement} section 
+     * @param {InspectorFieldDefinition} def The field properties
+     * @param {*} currentValue The value to set in the input
+     * @param {(val: *)} onChange The callback that recieves the new data when input changes
+     * @param {HTMLElement} section The element to append the field to, typically from `addSection`
      */
-    addField(def, currentValue, onChange, section) { // TODO add uint, restrict float input for int fields?
+    addField(def, currentValue, onChange, section) {
         const wrapper = document.createElement('div');
         wrapper.className = "input-group";
 
         const label = document.createElement('label');
-        label.innerText = def.label || def.name;
+        label.innerText = def.label || def.name || "";
         label.className = "form-label";
-        if(def.description)
-            label.title = def.description;
+        if(def.description) label.title = def.description;
 
-        let input = null;
+        let inputObj;
 
-        if(def.type === "select")
-            input = document.createElement("select");
-        else {
-            input = document.createElement("input");
-            input.value = currentValue; //TODO check type compatibility?
-        }
-        input.classList.add("form-input");
+        // Delegate rendering strategy
+        if (def.type === "select")
+            inputObj = this._createSelect(def.options, currentValue);
+        else if (def.type === "enum")
+            inputObj = this._createEnum(currentValue, onChange);
+        else
+            inputObj = this._createSimpleInput(def.type, currentValue);
 
-        /**
-         * Get the latest value from the field input
-         * @returns {*}
-         */
-        let getValue = () => {return null};
+        if (def.type === "bool")
+            label.classList.add("bool");
 
-        // Add input based on value type
-        switch (def.type) {
-            case "bool":
-                input.type = 'checkbox';
-                input.checked = currentValue;
-                input.classList.add("bool");
-                label.classList.add("bool");
-                getValue = () => { return input.checked };
-                break;
-            
-            case "select":
-                const defaultOpt = document.createElement('option');
-                defaultOpt.text = "Select";
-                defaultOpt.value = "";
-                input.appendChild(defaultOpt);
+        // Hook up change listeners
+        if (onChange)
+            inputObj.element.addEventListener('change', () => onChange(inputObj.getValue()));
 
-                if (def.options) {
-                    def.options.forEach(opt => {
-                        const el = document.createElement('option');
-                        el.value = opt.value;
-                        el.text = opt.label;
-                        if(opt.value === currentValue)
-                            el.selected = true;
-                        input.appendChild(el);
-                    });
-                }
-                getValue = () => { return input.value };
-                break;
+        // Add elements
+        label.appendChild(inputObj.element);
+        wrapper.appendChild(label);
+        (section || this.container).appendChild(wrapper);
 
-            case "enum":
-                input = document.createElement('div');
-                const rows = document.createElement('div');
+        return { wrapper, getValue: inputObj.getValue };
+    }
 
-                // Get choices from the form
-                getValue = () => {
-                    const real_kvs = [];
-                    Array.from(rows.children).forEach(row => {
-                        real_kvs.push({
-                            label: row.key_input.value,
-                            value: row.value_input.value
-                        });
-                    });
-                    return real_kvs;
-                }
-
-                /**
-                 * Create a row for label, value, and minus button
-                 * @param {string} k 
-                 * @param {*} v 
-                 */
-                const createKv = (k, v) => { //TODO fix spacing/styles
-                    const row = document.createElement('div');
-                    row.style.display = "flex";
-                    
-                    // Label input
-                    const key_input = document.createElement("input");
-                    key_input.type = "text";
-                    key_input.value = k;
-                    key_input.placeholder = "Name";
-                    key_input.classList.add("form-input");
-                    key_input.addEventListener("change", () => { onChange(getValue()) })
-                    row.appendChild(key_input);
-
-                    // Value input
-                    const value_input = document.createElement("input");
-                    value_input.type = "number";
-                    value_input.value = v;
-                    value_input.placeholder = "Value";
-                    value_input.classList.add("form-input");
-                    value_input.addEventListener("change", () => { onChange(getValue()) })
-                    row.appendChild(value_input);
-
-                    // Save inputs with the row
-                    row.value_input = value_input;
-                    row.key_input = key_input;
-
-                    const sub_button = document.createElement("button");
-                    sub_button.innerText = "-";
-                    sub_button.classList.add("form-input");
-                    sub_button.addEventListener("click", () => {
-                        row.remove();
-                        onChange(getValue());
-                    })
-                    row.appendChild(sub_button);
-
-                    rows.appendChild(row);
-                }
-
-                // Add saved choices
-                currentValue.forEach(real_kv => {
-                    createKv(real_kv.label, real_kv.value);
-                });
-
-                input.appendChild(rows);
-
-                // Add plus button
-                const add_button = document.createElement("button");
-                add_button.innerText = "+";
-                add_button.classList.add("form-input");
-                add_button.addEventListener("click", () => {
-                    createKv("", "");
-                    onChange(getValue());
-                });
-                input.appendChild(add_button);
-
-                break;
-
-            case "color":
-                getValue = () => {return input.value};
-                input.type = "color";
-                break;
-
-            case "int":
-                getValue = () => { return parseInt(input.value) };
-                input.type = "number";
-                break;
-            
-            case "float":
-                getValue = () => { return parseFloat(input.value) };
-                input.type = "number";
-                break;
-
-            case "number":
-                getValue = () => { return input.value === "" ? 0 : Number(input.value) };
-                input.type = "number";
-                break;
-
-            default:
-                getValue = () => { return input.value };
-                input.type = 'text';
-                break;
-        }
+    /**
+     * 
+     * @param {ChoiceObject[]} options 
+     * @param {*} currentValue
+     */
+    _createSelect(options, currentValue) {
+        const select = document.createElement("select");
+        select.classList.add("form-input");
         
-        // On value change callback
-        if (onChange) {
-            input.addEventListener('change', (e) => {
-                onChange(getValue());
+        // Default "Select" option
+        const defaultOpt = document.createElement('option');
+        defaultOpt.text = "Select";
+        defaultOpt.value = "";
+        select.appendChild(defaultOpt);
+
+        if (options) {
+            options.forEach(opt => {
+                const el = document.createElement('option');
+                el.value = opt.value;
+                el.text = opt.label;
+                if(opt.value === currentValue) el.selected = true;
+                select.appendChild(el);
             });
         }
 
-        // Add to document
-        label.appendChild(input);
-        wrapper.appendChild(label);
+        return {
+            element: select,
+            getValue: () => select.value
+        };
+    }
 
-        if(!section)
-            section = this.container;
-        section.appendChild(wrapper);
+    /**
+     * 
+     * @param {string} type 
+     * @param {*} currentValue 
+     */
+    _createSimpleInput(type, currentValue) {
+        const input = document.createElement("input");
+        input.classList.add("form-input");
+        input.value = currentValue ?? "";
 
-        return { wrapper, getValue };
+        let getValue;
+
+        switch (type) {
+            case "bool":
+                input.classList.add("bool");
+                input.type = 'checkbox';
+                input.checked = currentValue;
+                getValue = () => input.checked;
+                break;
+
+            case "color":
+                input.type = "color";
+                getValue = () => input.value;
+                break;
+
+            case "int":
+                input.type = "number";
+                getValue = () => parseInt(input.value);
+                break;
+
+            case "number":
+                input.type = "number";
+                getValue = () => input.value === "" ? 0 : Number(input.value);
+                break;
+                
+            default:
+                input.type = 'text';
+                getValue = () => input.value;
+                break;
+        }
+
+        return { element: input, getValue };
+    }
+
+    /**
+     * Create an entry for managing multiple key/value pairs
+     * @param {*} currentValue 
+     * @param {(val: *)} onChange 
+     * @returns 
+     */
+    _createEnum(currentValue, onChange) {
+        const container = document.createElement('div');
+        const rowsContainer = document.createElement('div');
+
+        const getValue = () => {
+            /** @type {ChoiceObject[]} */
+            const real_kvs = [];
+            Array.from(rowsContainer.children).forEach(row => {
+                real_kvs.push({
+                    label: row.key_input.value,
+                    value: row.value_input.value
+                });
+            });
+            return real_kvs;
+        };
+
+        /**
+         * Create a row for label, value, and minus button
+         * @param {string} k 
+         * @param {*} v 
+         */
+        const createRow = (k, v) => {
+            const row = document.createElement('div');
+            row.style.display = "flex";
+            
+            const keyInput = document.createElement("input");
+            keyInput.className = "form-input"; 
+            keyInput.placeholder = "Name"; 
+            keyInput.value = k;
+            
+            const valInput = document.createElement("input");
+            valInput.className = "form-input"; 
+            valInput.placeholder = "Value"; 
+            valInput.type = "number"; 
+            valInput.value = v;
+
+            const delBtn = document.createElement("button");
+            delBtn.className = "form-input"; 
+            delBtn.innerText = "-";
+            
+            // Events
+            const triggerChange = () => onChange(getValue());
+            keyInput.onchange = triggerChange;
+            valInput.onchange = triggerChange;
+            delBtn.onclick = () => { row.remove(); triggerChange(); };
+
+            row.appendChild(keyInput);
+            row.appendChild(valInput);
+            row.appendChild(delBtn);
+
+            // References for getValue
+            row.key_input = keyInput;
+            row.value_input = valInput;
+
+            rowsContainer.appendChild(row);
+        };
+
+        // Init existing rows
+        (currentValue || []).forEach(kv => createRow(kv.label, kv.value));
+
+        // Add Button
+        const addBtn = document.createElement("button");
+        addBtn.className = "form-input";
+        addBtn.innerText = "+";
+        addBtn.onclick = () => { createRow("", ""); onChange(getValue()); };
+
+        container.appendChild(rowsContainer);
+        container.appendChild(addBtn);
+
+        return { element: container, getValue };
     }
 
     /**
@@ -287,6 +300,7 @@ export class Inspector {
             }, section);
         }
 
+        // Add tag section
         if(widgetClass.allowedChannels.length > 0) {
             const tagSection = this.addSection();
             const tagTypedFieldsContainer = document.createElement('div');
@@ -348,26 +362,14 @@ export class Inspector {
         this.addField({ label: "Description", type: "text" }, dashboard.description, (value) => {dashboard.description = value}, dashboardSection);
 
         const dashboardPropertiesSection = this.addSection();
-
-        this.addField({ label: "Columns", type: "int" }, dashboard.canvasGridStack.getColumn(), (value) => {
-            dashboard.setColumnCount(value);
-        }, dashboardPropertiesSection);
+        this.addField({ label: "Columns", type: "int" }, dashboard.canvasGridStack.getColumn(), (value) => dashboard.setColumnCount(value), dashboardPropertiesSection);
 
         const saveSection = this.addSection();
-
-        this.addButton("Save Dashboard", () => {
-            dashboard.save();
-        }, saveSection);
+        this.addButton("Save Dashboard", () => dashboard.save(), saveSection);
 
         const ioSection = this.addSection();
-
-        this.addButton("Import", () => {
-            dashboard.fileInput.click();
-        }, ioSection);
-
-        this.addButton("Export", () => {
-            dashboard.exportFile();
-        }, ioSection);
+        this.addButton("Import", () => dashboard.fileInput.click(), ioSection);
+        this.addButton("Export", () => dashboard.exportFile(), ioSection);
     }
 
     /**
@@ -375,25 +377,39 @@ export class Inspector {
      */
     inspectGlobal() {
         this.clear();
-        this._formCreateTag();
-        this._formCreateAlarm();
+        this.inspectTag();
+        //this._formCreateTag();
+        //this._formCreateAlarm();
     }
 
-    _formCreateTag() {
-        this.addTitle("New Tag");
+    /**
+     * 
+     * @param {TagListObject} tag 
+     */
+    inspectTag(tag) {
+        this.clear();
+        const tagSelectSection = this.addSection();
+
+        const tagOptions = serverCache.tags.map(tag => ({ value: tag.external_id, label: Inspector.getTagLabel(tag) }));
+        this.addField({ label: "Tag", type: "select", options: tagOptions }, tag?.external_id, (tagID) => {
+            const selected = serverCache.tags.find(tag => tag.external_id === tagID);
+            this.inspectTag(selected)
+        }, tagSelectSection);
+
+        this.addTitle("Create or Edit Tag");
 
         const tagSection = this.addSection();
-        const alias = this.addField({ label: "Tag Name", type: "text" }, "", null, tagSection);
-        const description = this.addField({ label: "Description (optional)", type: "text" }, "", null, tagSection)
+        const alias = this.addField({ label: "Tag Name", type: "text" }, tag?.alias, null, tagSection);
+        const description = this.addField({ label: "Description (optional)", type: "text" }, tag?.description, null, tagSection)
 
         const locationSection = this.addSection();
         const deviceOptions = serverCache.devices.map(d => ({ value: d.alias, label: d.alias }));
-        const device = this.addField({ label: "Device", type: "select", options: deviceOptions }, "", null, locationSection);
-        const bitIndex = this.addField({ label: "Bit Index (0-15)", type: "int" }, 0, null, locationSection);
+        const device = this.addField({ label: "Device", type: "select", options: deviceOptions }, tag?.device, null, locationSection);
+        const bitIndex = this.addField({ label: "Bit Index (0-15)", type: "int" }, tag?.bit_index, tag?.bit_index, locationSection);
 
         // Dynamic data type field - update according to channel type
         const dataTypeContainer = document.createElement('div');
-        let getDataTypeValue = () => { return null };
+        let getDataTypeValue = () => { return tag?.data_type };
 
         /**
          * Update the data types and bit index field if channel changes
@@ -429,12 +445,12 @@ export class Inspector {
         }
         
         const channelOptions = serverCache.tagOptions.channels.map(o => ({ value: o.value, label: o.label }));
-        const channel = this.addField({ label: "Channel", type: "select", options: channelOptions }, "", onChannelChanged, locationSection);
-        onChannelChanged() // Add data type field
+        const channel = this.addField({ label: "Channel", type: "select", options: channelOptions }, tag?.channel, onChannelChanged, locationSection);
+        onChannelChanged(tag?.channel) // Add data type field
         locationSection.appendChild(dataTypeContainer);
         const address = this.addField({ label: "Address", type: "int", 
                 description: "The starting address of the value to read or write. 0-indexed." }, 
-            0, null, locationSection);
+            tag?.address || 0, null, locationSection);
 
         locationSection.appendChild(bitIndex.wrapper); // Move bit index field
 
@@ -442,24 +458,25 @@ export class Inspector {
         const historySection = this.addSection();
         const historyRetention = this.addField({ label: "History Retention (Seconds)", type: "int", 
                 description: "The maximum age of this tag's history entries. Use 0 for no history" },
-            0, null, historySection
+            tag?.history_retention || 0, null, historySection
         );
         const historyInterval = this.addField({ label: "History Write Interval (Seconds)", type: "int", 
                 description: "How long the server should wait before creating a new history entry. Use 0 for highest detail"}, 
-            1, null, historySection
+            tag?.history_interval || 0, null, historySection
         );
         
         /**
          * Post tag configuration to the server
+         * @param {boolean} create Send post or put request
          */
-        const tagSubmit = async () => {
+        const tagSubmit = async (create) => {
             const payload = {
                 alias: alias.getValue(),
                 description: description.getValue(),
                 device: device.getValue(),
                 address: address.getValue(),
                 channel: channel.getValue(),
-                bit_index: bitIndex.wrapper.classList.contains("hidden") ? null : bitIndex.getValue(),
+                bit_index: bitIndex.wrapper.classList.contains("hidden") ? 0 : bitIndex.getValue(),
                 data_type: getDataTypeValue(),
                 unit_id: 1,
                 //read_amount: readAmount.getValue(),
@@ -469,13 +486,40 @@ export class Inspector {
                 is_active: true
             };
 
-            const ok = await postServer('/api/tags/', payload, (data) => {
-                alert("Tag Created!");
-                refreshData();
-            });
+            if(create) {
+                requestServer('/api/tags/', 'POST', payload, (data) => {
+                    alert("Tag created!");
+                    serverCache.tags.push(data);
+                    this.inspectTag(data);
+                });
+            }
+            else {
+                requestServer(`/api/tags/${tag.external_id}/`, 'PUT', payload, (data) => {
+                    alert("Tag changed!");
+                    Object.assign(tag, data);
+                    this.inspectTag(tag);
+                });
+            }
         };
         const createSection = this.addSection();
-        this.addButton("Create Tag", tagSubmit, createSection);
+        this.addButton("Create New Tag", () => tagSubmit(true), createSection);
+
+        if(tag) {
+            this.addButton(`Update ${tag.alias}`, () => tagSubmit(false), createSection);
+
+            const deleteSection = this.addSection();
+            const delButton = this.addButton(`Delete ${tag.alias}`, () => {
+                if(window.confirm(`Are you sure you want to delete tag ${tag.alias}?`)) {
+                    requestServer(`/api/tags/${tag.external_id}/`, 'DELETE', null, async () => {
+                        alert("Tag deleted.");
+                        serverCache.tags = serverCache.tags.filter(t => t !== tag);
+                        this.inspectTag(); 
+                    });
+                }
+            }, deleteSection);
+            delButton.style.color = "crimson";
+        }
+        //TODO we need to notify dashboard/widgets about changes
     }
 
     _formCreateAlarm() {
@@ -547,7 +591,7 @@ export class Inspector {
             }
             
             console.log("Submitting:", payload);
-            const ok = await postServer('/api/alarms/', payload, (data) => {
+            const ok = await requestServer('/api/alarms/', 'POST', payload, (data) => {
                 alert("Alarm Created!");
             });
         }
