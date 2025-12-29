@@ -21,3 +21,12 @@ You can also run the test scripts to create a mock dashboard and run the simulat
 <br></br>
 <img width="1746" height="1200" alt="s2" src="https://github.com/user-attachments/assets/2d765b75-4543-4796-ba7b-e0bdeaa881cc" />
 </details>
+
+## Implementation Info
+
+#### Backend
+The poller runs in the same event loop as the Django/Uvicorn server, reading blocks of data from registered devices based on Tags. Info about updated Tags are sent to the WebSocket consumer. The poller also processes write requests and alarms each cycle. An ActivatedAlarm object is created if a Tag value meets the criteria of an AlarmConfig. Endpoints are handled by django-rest-framework.
+
+
+#### Frontend
+Each widget is defined by its GridStack element HTML, and Widget subclass. When loading a dashboard, widget config is fetched and those objects are created. When entering view mode, Widgets are registered with the dashboard TagListener, which fetches initial needed values then sets up a WebSocket, propagating new values as they are recieved. Submitting a value through an InputWidget creates a TagWriteRequest object in the database.

@@ -1,27 +1,17 @@
 @echo off
-echo ===============================
-echo   Django Reset DB + Migrations
-echo ===============================
+echo ===================
+echo   Django Reset DB
+echo ===================
 
 set APP_DIR=main
 set MIG_DIR=%APP_DIR%\migrations
 set PREVIEW_DIR=.media\dashboard_previews
 
+SET INPUT=
+SET /P INPUT="Wipe DB and register test objects? (y/n): "
+IF /I NOT "%INPUT%"=="y" GOTO END
+
 REM ---------- Clear DB ----------
-echo.
-echo Cleaning migration files in %MIG_DIR% ...
-
-if not exist "%MIG_DIR%" (
-    echo ERROR: Migrations folder not found!
-    exit /b
-)
-
-for %%m in ("%MIG_DIR%\*.py") do (
-    if NOT "%%~nxm"=="__init__.py" (
-        echo Deleting: %%m
-        del "%%m"
-    )
-)
 
 echo.
 echo Deleting database files...
@@ -61,3 +51,5 @@ python manage.py register_test_objects
 echo.
 echo Done!
 pause
+
+:END
