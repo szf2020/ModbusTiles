@@ -1,5 +1,5 @@
 import { serverCache, requestServer } from "./global.js";
-/** @import { InspectorFieldDefinition, ChoiceObject, DataType, TagListObject, ChannelType, InspectorDataType } from "./types.js" */
+/** @import { InspectorFieldDefinition, ChoiceObject, DataType, TagObject, ChannelType, InspectorDataType, AlarmConfigObject } from "./types.js" */
 /** @import { Widget } from "./widgets.js" */
 /** @import { Dashboard } from "./dashboard.js" */
 
@@ -31,12 +31,20 @@ export class Inspector {
     }
 
     /**
-     * @param {TagListObject} tag
+     * @param {TagObject} tag
      * @returns The string used for this tag in a dropdown
      */
     static getTagLabel(tag) {
         const bit = tag.bit_index !== null ? ":" + tag.bit_index : "";
         return `${tag.alias} (${tag.channel} ${tag.address}${bit})`;
+    }
+
+    /**
+     * @param {AlarmConfigObject} alarm
+     * @returns The string used for this alarm in a dropdown
+     */
+    static getAlarmLabel(alarm) {
+        return `${alarm.alias}`; //TODO
     }
 
     /**
@@ -307,7 +315,7 @@ export class Inspector {
 
             /**
              * Helper to create tag-dependent fields
-             * @param {TagListObject} tag 
+             * @param {TagObject} tag 
              */
             const createTagTypedFields = (tag) => {
                 tagTypedFieldsContainer.innerHTML = "";
@@ -373,18 +381,8 @@ export class Inspector {
     }
 
     /**
-     * Populate with globally reaching form
-     */
-    inspectGlobal() {
-        this.clear();
-        this.inspectTag();
-        //this._formCreateTag();
-        //this._formCreateAlarm();
-    }
-
-    /**
      * 
-     * @param {TagListObject} tag 
+     * @param {TagObject} tag 
      */
     inspectTag(tag) {
         this.clear();
@@ -399,7 +397,7 @@ export class Inspector {
         this.addTitle("Create or Edit Tag");
 
         const tagSection = this.addSection();
-        const alias = this.addField({ label: "Tag Name", type: "text" }, tag?.alias, null, tagSection);
+        const alias = this.addField({ label: "Tag Name", type: "text" }, tag?.alias || "", null, tagSection);
         const description = this.addField({ label: "Description (optional)", type: "text" }, tag?.description, null, tagSection)
 
         const locationSection = this.addSection();
@@ -522,10 +520,24 @@ export class Inspector {
         //TODO we need to notify dashboard/widgets about changes
     }
 
-    _formCreateAlarm() {
-        this.addTitle("New Alarm");
+    /**
+     * 
+     * @param {AlarmConfigObject} alarm 
+     */
+    inspectAlarm(alarm) {
+        this.clear();
+        const alarmSelectSection = this.addSection();
+
+        const alarmOptions = serverCache.alarms.map(alarm => ({ value: alarm.external_id, label: Inspector.getAlarmLabel(alarm) }));
+        this.addField({ label: "Alarm", type: "select", options: alarmOptions }, alarm?.external_id, (alarmID) => {
+            const selected = serverCache.alarms.find(alarm => alarm.external_id === alarmID);
+            this.inspectAlarm(selected)
+        }, alarmSelectSection);
+
+        this.addTitle("Create or Edit Alarm");
+
         const alarmSection = this.addSection();
-        const alias = this.addField({ label: "Alarm Name", type: "text" }, "", null, alarmSection);
+        const alias = this.addField({ label: "Alarm Name", type: "text" }, alarm?.alias, null, alarmSection);
 
         const triggerContainer = document.createElement('div'); 
         const operatorContainer = document.createElement('div');
@@ -553,34 +565,36 @@ export class Inspector {
             // Create an input with the same value type as the selected tag
             const fieldType = Inspector.getFieldType(tag.data_type);
 
-            const newOperatorField = this.addField({ label: "Operator", type: "select", options: operatorChoices}, "equals", null, operatorContainer);
+            const newOperatorField = this.addField({ label: "Operator", type: "select", options: operatorChoices}, alarm?.operator || "", null, operatorContainer);
             const newTriggerField = this.addField({ label: "Trigger Value", type: fieldType, 
                     description: "The value to compare with for triggering the alarm" }, 
-                "", null, triggerContainer
+                alarm?.trigger_value, null, triggerContainer
             );
             
             getOperatorValue = newOperatorField.getValue;
             getTriggerValue = newTriggerField.getValue;
         }
+        onTagChanged(alarm?.tag);
 
         const tagOptions = serverCache.tags.map(tag => ({ value: tag.external_id, label: Inspector.getTagLabel(tag)}));
-        const tag = this.addField({ label: "Control Tag", type: "select", options: tagOptions }, "", onTagChanged, alarmSection);
+        const tag = this.addField({ label: "Control Tag", type: "select", options: tagOptions }, alarm?.tag, onTagChanged, alarmSection);
 
         alarmSection.appendChild(operatorContainer);
         alarmSection.appendChild(triggerContainer);
 
         const threatLevelOptions = serverCache.alarmOptions.threat_levels.map(a => ({ value: a.value, label: a.label }));
-        const threatLevel = this.addField({ label: "Threat Level", type: "select", options: threatLevelOptions }, "", null, alarmSection);
+        const threatLevel = this.addField({ label: "Threat Level", type: "select", options: threatLevelOptions }, alarm?.threat_level, null, alarmSection);
 
         const message = this.addField({ label: "Message", type: "text", 
                 description: "The message to send to subscribers when the alarm activates" }, 
-            "", null, alarmSection
+            alarm?.message, null, alarmSection
         );
 
         /**
          * Post alarm configuration to the server
+         * @param {boolean} create If alarm should be created or updated
          */
-        const alarmSubmit = async () => {
+        const alarmSubmit = async (create) => {
             const payload = {
                 alias: alias.getValue(),
                 tag: tag.getValue(),
@@ -590,13 +604,39 @@ export class Inspector {
                 message: message.getValue(),
             }
             
-            console.log("Submitting:", payload);
-            const ok = await requestServer('/api/alarms/', 'POST', payload, (data) => {
-                alert("Alarm Created!");
-            });
+            if(create) {
+                requestServer('/api/alarms/', 'POST', payload, (data) => {
+                    alert("Alarm created!");
+                    serverCache.alarms.push(data);
+                    this.inspectAlarm(data);
+                });
+            }
+            else {
+                requestServer(`/api/alarms/${alarm.external_id}/`, 'PUT', payload, (data) => {
+                    alert("Alarm changed!");
+                    Object.assign(alarm, data);
+                    this.inspectAlarm(alarm);
+                });
+            }
         }
 
         const createSection = this.addSection();
-        this.addButton("Create Alarm", alarmSubmit, createSection);
+        this.addButton("Create New Alarm", () => alarmSubmit(true), createSection);
+
+        if(alarm) {
+            this.addButton(`Update ${alarm.alias}`, () => alarmSubmit(false), createSection);
+
+            const deleteSection = this.addSection();
+            const delButton = this.addButton(`Delete ${alarm.alias}`, () => {
+                if(window.confirm(`Are you sure you want to delete alarm ${alarm.alias}?`)) {
+                    requestServer(`/api/alarms/${alarm.external_id}/`, 'DELETE', null, async () => {
+                        alert("Alarm deleted.");
+                        serverCache.alarms = serverCache.alarms.filter(a => a !== alarm);
+                        this.inspectAlarm(); 
+                    });
+                }
+            }, deleteSection);
+            delButton.style.color = "crimson";
+        }
     }
 }

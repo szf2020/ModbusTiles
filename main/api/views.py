@@ -8,33 +8,54 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.decorators import action
 from .serializers import TagSerializer, TagValueSerializer, TagWriteRequestSerializer, TagHistoryEntrySerializer
-from .serializers import AlarmConfigSerializer, AlarmConfigDropdownSerializer, AlarmConfigCreateSerializer, ActivatedAlarmSerializer
+from .serializers import AlarmConfigSerializer, ActivatedAlarmSerializer
 from .serializers import DashboardDropdownSerializer, DashboardSerializer, DashboardWidgetSerializer, DashboardWidgetBulkSerializer
 from .serializers import DeviceSerializer, DeviceDropdownSerializer
 from ..models import DashboardWidget, Dashboard, Tag, Device, AlarmConfig, ActivatedAlarm, TagWriteRequest, TagHistoryEntry
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.serializers import Serializer
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Q
+from django.db.models.base import Model
+from django.db.models.manager import BaseManager
 
 #TODO should the metadata views all be one class?
 #TODO better docstrings
+#TODO figure out permissions for everything
 
-class DeviceViewSet(ModelViewSet):
+class UserModelViewSet(ModelViewSet):
+    """Base view for user-owned objects"""
+
+    user_max_count = None  # None = unlimited
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+
+        if user.is_staff:
+            return qs
+
+        return qs.filter(Q(owner=user) | Q(owner__isnull=True))
+
+    def perform_create(self, serializer):
+        if self.user_max_count is not None:
+            count = self.get_queryset().count()
+            if count >= self.user_max_count:
+                raise PermissionDenied("Max objects for user reached")
+
+        serializer.save(owner=self.request.user)
+
+
+class DeviceViewSet(UserModelViewSet):
     queryset = Device.objects.all()
-    max_count = 99
-    serializers = {
-        "list": DeviceDropdownSerializer,
-    }
+    serializers = { "list": DeviceDropdownSerializer }
     permission_classes = [IsAuthenticated]
+
+    user_max_count = 99
 
     def get_serializer_class(self):
         return self.serializers.get(self.action) or DeviceSerializer
-
-    def perform_create(self, serializer):
-        if Device.objects.all().count() > self.max_count:
-            raise ValidationError("Max devices reached") #TODO better error class/status code?
-        
-        serializer.save()
 
 
 class DeviceMetadataView(APIView):
@@ -43,54 +64,27 @@ class DeviceMetadataView(APIView):
 
     def get(self, request):
         return Response({
-            "protocols": [
-                {"value": k, "label": v} for k, v in Device.ProtocolChoices.choices
-            ],
-            "word_orders": [
-                {"value": k, "label": v} for k, v in Device.WordOrderChoices.choices
-            ],
+            "protocols": [{"value": k, "label": v} for k, v in Device.ProtocolChoices.choices],
+            "word_orders": [{"value": k, "label": v} for k, v in Device.WordOrderChoices.choices],
         })
 
 
-class TagViewSet(ModelViewSet):
+class TagViewSet(UserModelViewSet):
     lookup_field = 'external_id'
     serializer_class = TagSerializer
+    queryset = Tag.objects.all()
 
     user_max_count = 999
 
     def get_queryset(self):
-        qs = Tag.objects.all()
+        qs = super().get_queryset()
 
         device_alias = self.request.query_params.get("device")
         if device_alias:
             qs = qs.filter(device__alias=device_alias)
 
         return qs
-
-    def perform_create(self, serializer):
-        if Tag.objects.filter(owner=self.request.user).count() > self.user_max_count:
-            raise ValidationError("Max tags reached")
-        
-        serializer.save(owner=self.request.user)
-
-    def perform_update(self, serializer):
-        tag: Tag = self.get_object()
-        user = self.request.user
-
-        if tag.owner != user and not user.is_staff:
-            raise PermissionDenied("You can only edit your own tags.")
-        else:
-            serializer.save()
-
-    def perform_destroy(self, instance):
-        tag: Tag = self.get_object()
-        user = self.request.user
-
-        if tag.owner != user and not user.is_staff:
-            raise PermissionDenied("You can only delete your own tags.")
-        else:
-            instance.delete()
-
+    
 
 class TagMetadataView(APIView):
     """ Returns the available choices for Channels and Data Types """
@@ -98,12 +92,8 @@ class TagMetadataView(APIView):
 
     def get(self, request):
         return Response({
-            "channels": [
-                {"value": k, "label": v} for k, v in Tag.ChannelChoices.choices
-            ],
-            "data_types": [
-                {"value": k, "label": v} for k, v in Tag.DataTypeChoices.choices
-            ],
+            "channels": [{"value": k, "label": v} for k, v in Tag.ChannelChoices.choices],
+            "data_types": [{"value": k, "label": v} for k, v in Tag.DataTypeChoices.choices],
         })
     
 
@@ -117,7 +107,7 @@ class TagWriteRequestViewSet(ModelViewSet):
         user = self.request.user
 
         if tag.owner != user and not user.is_staff:
-            raise PermissionDenied("You do not have permission to write to this tag.")
+            raise PermissionDenied("You do not have permission to write to this tag.") #TODO field to allow other users to write to a tag?
 
         serializer.save()
 
@@ -220,8 +210,9 @@ class DashboardViewSet(ModelViewSet):
 
 class DashboardWidgetViewSet(ModelViewSet):
     serializer_class = DashboardWidgetSerializer
-    max_count = 99
     permission_classes = [IsAuthenticated]
+
+    dashboard_max_count = 99
 
     def get_queryset(self):
         # Only see owned widgets
@@ -239,22 +230,22 @@ class DashboardWidgetViewSet(ModelViewSet):
         if dashboard.owner != self.request.user:
             raise PermissionDenied("Not your dashboard")
 
-        if DashboardWidget.objects.filter(dashboard=dashboard).count() >= self.max_count:
+        if DashboardWidget.objects.filter(dashboard=dashboard).count() >= self.dashboard_max_count:
             raise ValidationError("Max widgets reached for dashboard")
         
         serializer.save()
 
 
-class AlarmConfigViewSet(ModelViewSet):
-    max_count = 999
-    serializers = {
-        "list": AlarmConfigDropdownSerializer,
-        "create": AlarmConfigCreateSerializer,
-    }
+class AlarmConfigViewSet(UserModelViewSet):
+    lookup_field = 'external_id'
+    serializer_class = AlarmConfigSerializer
     permission_classes = [IsAuthenticated]
+    queryset =  AlarmConfig.objects.all()
+
+    user_max_count = 999
 
     def get_queryset(self):
-        qs = AlarmConfig.objects.all()
+        qs = super().get_queryset()
 
         # Get alarms for a specified tag
         tag_id = self.request.query_params.get("tag")
@@ -262,15 +253,6 @@ class AlarmConfigViewSet(ModelViewSet):
             qs = qs.filter(tag__external_id=tag_id)
 
         return qs
-    
-    def get_serializer_class(self):
-        return self.serializers.get(self.action) or AlarmConfigSerializer
-    
-    def perform_create(self, serializer):
-        if AlarmConfig.objects.filter(owner=self.request.user).count() > 999:
-            raise ValidationError("Max alarms reached")
-        
-        serializer.save()
 
 
 class AlarmMetadataView(APIView):
@@ -279,12 +261,8 @@ class AlarmMetadataView(APIView):
 
     def get(self, request):
         return Response({
-            "threat_levels": [
-                {"value": k, "label": v} for k, v in AlarmConfig.ThreatLevelChoices.choices
-            ],
-            "operator_choices": [
-                {"value": k, "label": v} for k, v in AlarmConfig.OperatorChoices.choices
-            ],
+            "threat_levels": [{"value": k, "label": v} for k, v in AlarmConfig.ThreatLevelChoices.choices],
+            "operator_choices": [{"value": k, "label": v} for k, v in AlarmConfig.OperatorChoices.choices],
         })
     
     

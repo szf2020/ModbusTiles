@@ -5,11 +5,15 @@
 /** @typedef {'bool' | 'int' | 'number' | 'text' | 'color' | 'select' | 'enum'} InspectorDataType */
 
 /**
- * Object recieved from `api.serializers.AlarmConfigDropdownSerializer`
- * @typedef {Object} AlarmConfigListObject
+ * Object recieved from `api.serializers.AlarmSerializer`
+ * @typedef {Object} AlarmConfigObject
+ * @property {string} tag The UUID of the tag
+ * @property {*} trigger_value Value to compare with
+ * @property {'equals' | 'greater_than' | 'less_than'} operator Operator for comparing tag value with trigger_value
+ * @property {boolean} enabled If the alarm is triggerable
  * @property {string} alias Name of the alarm config
- * @property {ThreatLevel} threat_level The urgency of the alarm
  * @property {string} message Message that subscribers to the alarm recieve
+ * @property {ThreatLevel} threat_level The urgency of the alarm
  */
 
 /**
@@ -18,12 +22,12 @@
  * @property {string} id The UUID of the tag
  * @property {string|number|boolean} value The current value of the tag
  * @property {number} age The age in seconds of the tag value
- * @property {AlarmConfigListObject} alarm The alarm associated with this tag, if active
+ * @property {string} alarm The alarm ID associated with this tag, if active
  */
 
 /**
  * Object recieved from `api.serializers.TagSerializer` through `/api/tags/`
- * @typedef {Object} TagListObject
+ * @typedef {Object} TagObject
  * @property {string} device The device alias
  * @property {string} external_id The UUID of the tag
  * @property {string} alias Human readable name (e.g. "Sump Level")
@@ -84,7 +88,8 @@
 
 /**
  * @typedef {Object} ServerCacheObject
- * @property {TagListObject[]} tags All tags registered on the server
+ * @property {TagObject[]} tags All tags registered on the server
+ * @property {AlarmConfigObject[]} alarms All alarms registered on the server
  * @property {DeviceListObject[]} devices All devices registered on the server
  * @property {TagOptionsObject} tagOptions Choice collection for tag attributes
  * @property {AlarmOptionsObject} alarmOptions Choice collection for alarm attributes

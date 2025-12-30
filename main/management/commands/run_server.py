@@ -9,7 +9,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         port = options["port"]
-        print("port:", port)
 
         uvicorn.run(
             "modbus_tiles.asgi_with_poller:app",

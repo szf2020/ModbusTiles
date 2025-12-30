@@ -1,5 +1,5 @@
-import { requestServer } from "./global.js";
-/** @import { TagListObject, TagValueObject, AlarmConfigListObject, InspectorFieldDefinition, ChannelType, DataType } from "./types.js" */
+import { requestServer, serverCache } from "./global.js";
+/** @import { TagObject, TagValueObject, AlarmConfigObject, InspectorFieldDefinition, ChannelType, DataType } from "./types.js" */
 
 /**
  * Abstract class for dashboard widgets.
@@ -45,7 +45,7 @@ export class Widget {
     /**
      * @param {HTMLElement} gridElem 
      * @param {Object} config 
-     * @param {TagListObject} tag 
+     * @param {TagObject} tag 
      */
     constructor(gridElem, config, tag) {      
         // Apply defaults
@@ -56,7 +56,7 @@ export class Widget {
                 config[field.name] = field.default;
         });
 
-        /**@type {TagListObject} meta describing the tag this widget should use */
+        /**@type {TagObject} meta describing the tag this widget should use */
         this.tag = tag;
 
         /** The entries for defaultFields, customFields, etc. Fields not provided are set to default */
@@ -94,12 +94,13 @@ export class Widget {
 
         this.onValue(data.value, data.time);
 
-        this.setAlarm(data.alarm);
+        const alarm = data.alarm ? serverCache.alarms.find(a => a.external_id === data.alarm) : null; //TODO O(1)
+        this.setAlarm(alarm);
     }
 
     /**
      * Visually updates the widget with the alarm from onData
-     * @param {AlarmConfigListObject} alarm The alarm config info
+     * @param {AlarmConfigObject} alarm The alarm config info
      */
     setAlarm(alarm) {
         if(!this.alarmIndicator)

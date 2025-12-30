@@ -28,7 +28,11 @@ export class Dashboard {
 
         /** @type {Inspector} */
         this.tagForm = new Inspector(document.getElementById('tag-form'));
-        this.tagForm.inspectGlobal();
+        this.tagForm.inspectTag();
+
+        /** @type {Inspector} */
+        this.alarmForm = new Inspector(document.getElementById('alarm-form'));
+        this.alarmForm.inspectAlarm();
 
         //TODO maybe have a metadata dict which contains all the stuff? 
         const dashboardMeta = document.getElementById('dashboard-container').dataset // Set by Django
@@ -204,7 +208,7 @@ export class Dashboard {
     /**
      * Creates a Widget instance of the provided type with a new GridStack element and adds it to the dashboard
      * @param {string} typeName 
-     * @param {TagListObject} tag 
+     * @param {TagObject} tag 
      * @param {Object} config 
      */
     createWidget(typeName, tag, config) {

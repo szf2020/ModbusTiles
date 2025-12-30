@@ -189,7 +189,8 @@ class AlarmConfig(models.Model):
         ThreatLevelChoices.HIGH: 2,
         ThreatLevelChoices.CRITICAL: 3,
     }
-
+    
+    external_id = models.UUIDField(default=uuid.uuid4, unique=True)
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name="alarm_configs")
     trigger_value = models.JSONField(help_text="Value that triggers this alarm")
     #trigger_sustain = models.DurationField(default=timedelta(seconds=3))

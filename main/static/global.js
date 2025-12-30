@@ -6,6 +6,7 @@
  */
 export const serverCache = {
     tags: [], //TODO make this a map of external_id -> other info?
+    alarms: [],
     devices: [],
     tagOptions: [],
     alarmOptions: [],
@@ -19,14 +20,16 @@ export const serverCache = {
 export async function refreshData() { //TODO options?
     try {
         // Fetch Tags and Devices in parallel
-        const [tagsResp, devicesResp, tagOptions, alarmOptions] = await Promise.all([
+        const [tagsResp, alarmsResp, devicesResp, tagOptions, alarmOptions] = await Promise.all([
             fetch('/api/tags/'),
+            fetch('/api/alarms/'),
             fetch('/api/devices/'),
             fetch('/api/tag-options/'),
             fetch('/api/alarm-options/')
         ]);
 
         serverCache.tags = await tagsResp.json();
+        serverCache.alarms = await alarmsResp.json();
         serverCache.devices = await devicesResp.json();
         serverCache.tagOptions = await tagOptions.json();
         serverCache.alarmOptions = await alarmOptions.json();

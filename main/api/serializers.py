@@ -41,15 +41,12 @@ class DashboardDropdownSerializer(serializers.ModelSerializer):
 
 
 class AlarmConfigSerializer(serializers.ModelSerializer):
+    tag = serializers.SlugRelatedField(slug_field='external_id', queryset=Tag.objects.all())
+    notification_cooldown = DurationSecondsField(required=False, allow_null=True)
+
     class Meta:
         model = AlarmConfig
-        fields = "__all__"
-
-
-class AlarmConfigDropdownSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AlarmConfig
-        fields = ["alias", "threat_level", "message"]
+        exclude = ["owner", "last_notified"]
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -63,25 +60,8 @@ class TagSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tag
-        fields = [
-            "external_id",
-            "device",
-            #"unit_id",
-            "alias",
-            "description",
-            "channel",
-            "data_type",
-            "address",
-            "bit_index",
-            #"read_amount",
-            "history_retention",
-            "history_interval",
-            "is_active",
-        ]
         read_only_fields = ["external_id"]
-        extra_kwargs = {
-            "owner": {"read_only": True},
-        }
+        exclude = ["owner"]
 
     def validate(self, attrs):
         bit_index = attrs.get("bit_index")
@@ -95,11 +75,10 @@ class TagSerializer(serializers.ModelSerializer):
 
 class TagValueSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='external_id', read_only=True)
-
     value = serializers.JSONField(source='current_value', read_only=True)
     time = serializers.DateTimeField(source='last_updated', read_only=True)
-    age = serializers.SerializerMethodField()
-    alarm = serializers.SerializerMethodField()
+    age = serializers.SerializerMethodField(read_only=True)
+    alarm = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Tag
@@ -113,16 +92,11 @@ class TagValueSerializer(serializers.ModelSerializer):
 
     def get_alarm(self, obj: Tag):
         alarm: ActivatedAlarm = self.context.get("alarm_map", {}).get(obj.id)
-        if alarm:
-            return AlarmConfigDropdownSerializer(alarm.config).data
-        return None
+        return str(alarm.config.external_id) if alarm else None
     
 
 class TagWriteRequestSerializer(serializers.ModelSerializer):
-    tag = serializers.SlugRelatedField(
-        slug_field='external_id', 
-        queryset=Tag.objects.all()
-    )
+    tag = serializers.SlugRelatedField(slug_field='external_id', queryset=Tag.objects.all())
 
     class Meta:
         model = TagWriteRequest
@@ -139,35 +113,6 @@ class TagWriteRequestSerializer(serializers.ModelSerializer):
 class TagHistoryEntrySerializer(serializers.Serializer):
     timestamp = serializers.DateTimeField()
     value = serializers.JSONField()
-
-
-class AlarmConfigCreateSerializer(serializers.ModelSerializer):
-    tag = serializers.SlugRelatedField(
-        slug_field='external_id', 
-        queryset=Tag.objects.all()
-    )
-    class Meta:
-        model = AlarmConfig
-        fields = [
-            "alias",
-            "tag",
-            "threat_level",
-            "trigger_value",
-            "operator",
-            "message",
-        ]
-
-
-class AlarmConfigUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AlarmConfig
-        fields = [
-            "tag",
-            "trigger_value",
-            "alias",
-            "message",
-            "enabled",
-        ]
 
 
 class AlarmSubscriptionSerializer(serializers.ModelSerializer):
