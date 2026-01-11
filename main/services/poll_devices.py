@@ -25,10 +25,17 @@ class PollContext:
     updated_tags: list[Tag]
     read_tags: list[Tag]
 
+@dataclass
+class DeviceState:
+    failures: int = 0
+    next_retry: float = 0.0
+    disabled_until: float = 0.0
+
 logger = logging.getLogger(__name__)
 
 channel_layer = get_channel_layer()
 clients: dict[str, ModbusBaseClient] = {}
+device_states: dict[str, DeviceState] = defaultdict(DeviceState)
 
 
 async def poll_devices(poll_interval=0.25, info_interval=30):
@@ -110,9 +117,11 @@ async def poll_devices(poll_interval=0.25, info_interval=30):
 
 async def _poll_device(device: Device, context: PollContext):
     """ Process read and writes for a device """
-
+    if time.monotonic() < device_states[device.alias].disabled_until:
+        return
+    
     try:
-        client = await _get_client(device) #TODO stop trying if it fails too often?
+        client = await _get_client(device)
     except Exception as e:
         logger.warning(f"Couldn't connect to device {device}: {e}")
         return
@@ -125,25 +134,34 @@ async def _poll_device(device: Device, context: PollContext):
         await _process_block(block, client, context)
 
 
-async def _get_client(device: Device) -> ModbusBaseClient | None:
+async def _get_client(device: Device, base_backoff_seconds=2, max_backoff_seconds=60) -> ModbusBaseClient | None:
     """Get or create a persistent client connection"""
 
+    state = device_states[device.alias]
     conn = clients.get(device.alias)
+
     if conn is None or not conn.connected:
         match device.protocol:
             case Device.ProtocolChoices.MODBUS_TCP:
-                conn = AsyncModbusTcpClient(device.ip_address, port=device.port)
+                conn = AsyncModbusTcpClient(device.ip_address, port=device.port, retries=0)
 
             case Device.ProtocolChoices.MODBUS_UDP:
-                conn = AsyncModbusUdpClient(device.ip_address, port=device.port)
+                conn = AsyncModbusUdpClient(device.ip_address, port=device.port, retries=0)
             #case Device.ProtocolChoices.MODBUS_RTU:
             #    conn = ModbusSerialClient(device.port)
-        if await conn.connect(): #TODO only retry after set duration?
+        if await conn.connect():
+            state.failures = 0
+            clients[device.alias] = conn
             logger.info(f"Established connection: {conn}")
         else:
+            state.failures += 1
+
+            backoff = min(base_backoff_seconds * (2 ** (min(state.failures, 32) - 1)), max_backoff_seconds)
+            state.disabled_until = time.monotonic() + backoff
+
+            logger.warning(f"{device.alias} unreachable. Trying again in {backoff:.1f}s.")
             raise ConnectionError("Could not connect to PLC", conn)
     
-    clients[device.alias] = conn
     return conn
 
 
