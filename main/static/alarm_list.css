@@ -33,6 +33,15 @@
 .alarm-table .threat-level {
 }
 
+.resolved-title {
+    margin-top: 40px;
+    opacity: 0.8;
+}
+
+.alarm-table.resolved {
+    opacity: 0.7;
+}
+
 .row-crit { 
     border-left: 5px solid #e74c3c; 
 }

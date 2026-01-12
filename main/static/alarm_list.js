@@ -3,47 +3,75 @@ import { requestServer, refreshData, serverCache } from "./global.js";
 
 /** 
  * Populate table with ActivatedAlarm objects from the server 
- * */
+ */
 async function loadAlarms() {
+    const activeTbody = document.querySelector('#active-alarms-table tbody');
+    const resolvedTbody = document.querySelector('#resolved-alarms-table tbody');
+
     requestServer('/api/activated-alarms/', 'GET', null, /** @param {ActivatedAlarmObject[]} data */ (data) => {
-        const tbody = document.querySelector('#active-alarms-table tbody');
-        tbody.innerHTML = '';
-        
-        // TODO make 2 tables?
-        data.sort((a, b) => (a.is_active === b.is_active) ? 0 : a.is_active ? -1 : 1);
-
+        activeTbody.innerHTML = '';
+        resolvedTbody.innerHTML = '';
         data.forEach(alarm => {
-            const alarmConfig = serverCache.alarms[alarm.config];
-            const tag = serverCache.tags[alarmConfig.tag];
-            const threat_level = serverCache.alarmOptions.threat_levels.find(choice => choice.value === alarmConfig.threat_level)?.label;
-
-            console.log(alarm);
-
-            const tr = document.createElement('tr');
-            tr.className = `row-${alarmConfig.threat_level}`;
-            
-            const time = new Date(alarm.timestamp).toLocaleString();
-            const timeHeard = alarm.acknowledged ? new Date(alarm.acknowledged_at).toLocaleString() : "";
-            const timeResolved = alarm.is_active ? "" : new Date(alarm.resolved_at).toLocaleString();
-            const status = alarm.is_active ? "ACTIVE" : "Resolved";
-
-            const actionHtml = alarm.acknowledged ? 
-                `<span class="user" title="Heard at ${timeHeard}">Heard by ${alarm.acknowledged_by_username || 'Unknown'}</span>` :
-                `<button class="form-button ack-btn" data-id="${alarm.id}">Acknowledge</button>`;
-
-            tr.innerHTML = `
-                <td>${time}</td>
-                <td>${tag.alias}</td> <td>${alarmConfig.message} <span class="message" title="Resolved at ${timeResolved}">[${status}]</span></td>
-                <td class="threat-level">${threat_level}</td>
-                <td>${actionHtml}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        document.querySelectorAll('.ack-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => acknowledge(e.target.dataset.id));
+            const row = createAlarmRow(alarm);
+            const body = alarm.is_active ? activeTbody : resolvedTbody;
+            body.appendChild(row);
         });
     });
+}
+
+/**
+ * Create a table row from the given alarm
+ * @param {ActivatedAlarmObject} alarm 
+ */
+function createAlarmRow(alarm) {
+    const alarmConfig = serverCache.alarms[alarm.config];
+    const tag = serverCache.tags[serverCache.alarms[alarm.config].tag];
+    const threatLevel = {"low": "🔔 Low", "high": "⚠️ High", "crit": "‼️ Critical"}[alarmConfig.threat_level];
+
+    const tr = document.createElement('tr');
+    tr.className = `row-${alarmConfig.threat_level}`;
+
+    const time = new Date(alarm.timestamp).toLocaleString();
+    const timeHeard = alarm.acknowledged ? new Date(alarm.acknowledged_at).toLocaleString() : "";
+    //const timeResolved = alarm.is_active ? "" : new Date(alarm.resolved_at).toLocaleString();
+    //const status = alarm.is_active ? "ACTIVE" : "Resolved";
+
+    tr.appendChild(td(threatLevel, "threat-level"));
+    tr.appendChild(td(time));
+    tr.appendChild(td(tag.alias, null, tag.description));
+
+    const messageTd = document.createElement('td');
+    messageTd.textContent = alarmConfig.message + " ";
+    tr.appendChild(messageTd);
+
+    const actionTd = document.createElement('td');
+    if (alarm.acknowledged) {
+        tr.appendChild(td(`Heard by ${alarm.acknowledged_by_username || 'Unknown'}`, "user", `Heard at ${timeHeard}`))
+    } 
+    else {
+        const btn = document.createElement('button');
+        btn.className = "form-button ack-btn";
+        btn.textContent = "Acknowledge";
+        btn.addEventListener('click', () => acknowledge(alarm.id));
+        actionTd.appendChild(btn);
+    }
+
+    tr.appendChild(actionTd);
+    return tr;
+}
+
+/**
+ * Get a data cell with attributes
+ * @param {string} text 
+ * @param {string} className 
+ * @param {string} title
+ */
+function td(text, className, title) {
+    const cell = document.createElement('td');
+    if (className) cell.className = className;
+    if (title) cell.title = title;
+    cell.textContent = text;
+    return cell;
 }
 
 function acknowledge(id) {
