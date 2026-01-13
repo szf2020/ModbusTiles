@@ -38,11 +38,7 @@ class AlarmConfigSerializer(serializers.ModelSerializer):
 
 
 class TagSerializer(serializers.ModelSerializer):
-    device = serializers.SlugRelatedField(
-        slug_field='alias', 
-        queryset=Device.objects.all()
-    )
-
+    device = serializers.SlugRelatedField( slug_field='alias',  queryset=Device.objects.all())
     history_retention = DurationSecondsField(required=False, allow_null=True)
     history_interval = DurationSecondsField(required=False, allow_null=True)
 
@@ -120,37 +116,25 @@ class ActivatedAlarmSerializer(serializers.ModelSerializer):
 
 
 class DashboardSerializer(serializers.ModelSerializer):
-    alias = serializers.CharField(required=False, allow_blank=True)
     owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
 
     class Meta:
         model = Dashboard
-        fields = ["alias", "description", "column_count", "owner"]
+        exclude = ["preview_image"]
+        read_only_fields = ["alias"]
 
 
 class DashboardWidgetSerializer(serializers.ModelSerializer):
-    tag = serializers.SlugRelatedField(
-        slug_field='external_id',
-        queryset=Tag.objects.all()
-    )
+    tag = serializers.SlugRelatedField( slug_field='external_id', queryset=Tag.objects.all())
+
     class Meta:
         model = DashboardWidget
-        fields = [
-            "tag",
-            "widget_type",
-            "config",
-        ]
+        fields = ["tag", "widget_type", "config"]
 
 
 class DashboardWidgetBulkSerializer(serializers.Serializer):
     """ Used for the Save Dashboard payload """
     
-    tag = serializers.SlugRelatedField(
-        slug_field='external_id',
-        queryset=Tag.objects.all(),
-        required=False, 
-        allow_null=True
-    )
-    
+    tag = serializers.SlugRelatedField(slug_field='external_id', queryset=Tag.objects.all(), required=False, allow_null=True)
     widget_type = serializers.ChoiceField(choices=DashboardWidget.WidgetTypeChoices.choices)
     config = serializers.JSONField()

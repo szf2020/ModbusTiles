@@ -48,7 +48,7 @@
     object-fit: cover;
 }
 
-.dashboard-title { margin: 1rem 0.25rem 0.25rem; }
+.dashboard-card .title { margin: 1rem 0.25rem 0.25rem; }
 .dashboard-card p { margin: 0; }
 
 /* --- Create Button  --- */

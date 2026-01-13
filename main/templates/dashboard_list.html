@@ -8,11 +8,11 @@
         <div class="brand">
             <h1>ModbusTiles
                 <span class="separator">/</span>
-                <span class="dashboard-alias">{{ user.username }}'s dashboards</span>
+                <span class="dashboard-title">{{ user.username }}'s dashboards</span>
             </h1>
         </div>
         <div class="header-controls">
-            <a class="dashboard-alias" href="{% url 'alarms' %}">View Alarms
+            <a class="dashboard-title" href="{% url 'alarms' %}">View Alarms
                 <span id="alarm-badge">0</span>
             </a>
             <form method="post" action="{% url 'logout' %}" style="margin: 0 auto;">
@@ -32,7 +32,7 @@
                         <div class="placeholder">No Preview</div>
                     {% endif %}
                 </div>
-                <h3 class="dashboard-title">{{ db.alias }}</h3>
+                <h3 class="title">{{ db.title }}</h3>
                 <p>{{ db.description }}</p>
             </a>
             {% endfor %}

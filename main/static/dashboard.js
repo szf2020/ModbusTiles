@@ -3,14 +3,17 @@ import { TagListener } from "./tag_listener.js";
 import { GridStack } from 'https://cdn.jsdelivr.net/npm/gridstack@12.3.3/+esm'
 import { refreshData, requestServer, serverCache } from "./global.js";
 import { Inspector } from "./inspector.js";
-/** @import { DashboardWidgetInfoObject, DashboardConfigObject } from "./types.js" */
+/** @import { DashboardWidgetInfoObject, DashboardConfigObject, DashboardObject } from "./types.js" */
 /** @import { Widget } from "./widgets.js" */
 
 /**
  * The main class for a dashboard page which handles Widget, TagListener, and Inspector classes 
  */
 export class Dashboard {
-    constructor() {
+    /**
+     * @param {string} alias 
+     */
+    constructor(alias) {
         /** @type {boolean} */
         this.editMode = false;
 
@@ -34,16 +37,8 @@ export class Dashboard {
         this.alarmForm = new Inspector(document.getElementById('alarm-form'));
         this.alarmForm.inspectAlarm();
 
-        //TODO maybe have a metadata dict which contains all the stuff? 
-        const dashboardMeta = document.getElementById('dashboard-container').dataset // Set by Django
-
-        /** @type {string} */
-        this.alias = dashboardMeta.alias;
-
-        this.newAlias = this.alias; //TODO? used for keeping the desired new name before saving
-
-        /** @type {string} */
-        this.description = dashboardMeta.description;
+        /** @type {DashboardObject} */
+        this.config = null;
 
         // Elements
         this.widgetGrid = document.getElementById('dashboard-grid');
@@ -51,8 +46,7 @@ export class Dashboard {
 
         // Init
         this._setupEvents();
-        this._setupGridStack(parseInt(dashboardMeta.columns));
-        this.load();
+        this.load(alias);
     }
 
     _setupEvents() {
@@ -153,8 +147,7 @@ export class Dashboard {
         this.canvasGridStack.on('dragstart', (event, el) => {
             if (event.shiftKey && el && el.widgetInstance) {
                 const config = JSON.parse(JSON.stringify(el.widgetInstance.config));
-                config.locked = true; 
-
+                config.locked = true;
                 this.canvasGridStack.batchUpdate();
                 newWidget = this.createWidget(el.dataset.type, el.widgetInstance.tag, config);
                 this.canvasGridStack.update(newWidget.gridElem, { locked: true }); //TODO this is kinda irritating... cuz widget doesn't set config immediately
@@ -186,12 +179,12 @@ export class Dashboard {
     /**
      * Populate the dashboard with new widgets from the given data
      * @param {DashboardWidgetInfoObject[]} widgetData 
+     * @param {number} columnCount
      */
-    async setupWidgets(widgetData) {
-        if(!this.canvasGridStack) {
-            console.error("Gridstack not initialized");
-            return;
-        }
+    async setupWidgets(widgetData, columnCount) {
+        this.canvasGridStack ?
+            this.setColumnCount(columnCount) :
+            this._setupGridStack(columnCount);
 
         this.canvasGridStack.removeAll();
         this.listener.clear();
@@ -268,18 +261,12 @@ export class Dashboard {
 
             this.canvasGridStack.setStatic(true);
 
-            this._getWidgets().forEach(widget => {
-                this.listener.registerWidget(widget);
-            });
+            this._getWidgets().forEach(widget => this.listener.registerWidget(widget));
             this.listener.connect();
         }
 
-        const animInterval = setInterval(() => {
-            this.updateSquareCells();
-        }, 13);
-        setTimeout(() => {
-            clearInterval(animInterval);
-        }, 500);
+        const animInterval = setInterval(() => this.updateSquareCells(), 13);
+        setTimeout(() => clearInterval(animInterval), 500);
     }
 
     /**
@@ -325,35 +312,41 @@ export class Dashboard {
      * @param {number} val 
      */
     setColumnCount(val) {
+        this.config.column_count = val;
         this.canvasGridStack.column(val);
         this.updateSquareCells();
     }
 
     /**
-     * Fetch and apply widget data from the server based on this dashboard's name
+     * Fetch and apply widget data from the server based on the given name
+     * @param {string} alias
      */
-    async load() {
+    async load(alias) {
         try {
-            document.getElementById('loading-spinner').classList.remove('hidden');
+            const [metaResp, widgetResp] = await Promise.all([
+                fetch(`/api/dashboards/${alias}`),
+                fetch(`/api/dashboard-widgets/?dashboard=${alias}`)
+            ]);
 
-            // Get widget info from server
-            const response = await fetch(`/api/dashboard-widgets/?dashboard=${this.alias}`);
-            if(!response.ok) throw new Error("Failed to load widgets");
-            
-            const widgets = await response.json();
+            /** @type {DashboardWidgetInfoObject[]} */
+            const widgets = await widgetResp.json();
+
+            /** @type {DashboardObject} */
+            const meta = await metaResp.json();
+            this.config = { alias: alias, title: meta.title, description: meta.description, column_count: meta.column_count };
 
             // Set up recieved info
-            await this.setupWidgets(widgets);
+            await this.setupWidgets(widgets, this.config.column_count);
 
             if(widgets.length === 0) {
                 this.toggleEdit(true);
             }
             else {
-                this._getWidgets().forEach(widget => {
-                    this.listener.registerWidget(widget);
-                });
+                this._getWidgets().forEach(widget => this.listener.registerWidget(widget));
                 await this.listener.connect();
             }
+
+            document.getElementById('loading-spinner').classList.remove('hidden');
         } 
         catch (err) {
             console.error(err);
@@ -372,42 +365,40 @@ export class Dashboard {
         const formData = new FormData();
 
         // Add meta
-        const config = this._getConfig();
+        const config = this._getFullConfig();
 
-        formData.append('alias', this.newAlias);
+        formData.append('title', config.title);
         formData.append('description', config.description);
         formData.append('column_count', config.column_count);
         formData.append('widgets', JSON.stringify(config.widgets));
 
         // Get image data
-        const imageBlob = await this._getPreview();
-        if (imageBlob) {
-            formData.append('preview_image', imageBlob, 'preview.jpg');
-        }
+        const imageBlob = await this._getPreview(); //TODO only do if widgets changed? Would need a better dirty flag system
+        if (imageBlob) formData.append('preview_image', imageBlob, 'preview.jpg');
 
-        requestServer(`/api/dashboards/${this.alias}/save-data/`, 'POST', formData, (data) => {
+        requestServer(`/api/dashboards/${this.config.alias}/save-data/`, 'POST', formData, (data) => {
             this.isDirty = false;
-            this.alias = this.newAlias;
-            const aliasElem = document.getElementById('dashboard-alias');
-            aliasElem.innerText = this.newAlias;
-            aliasElem.title = this.description;
-            history.pushState({}, "", `/dashboard/${this.newAlias}/`); // Change URL
+            this.config.alias = data.new_alias;
+            const titleElem = document.getElementById('dashboard-title');
+            titleElem.innerText = this.config.title;
+            titleElem.title = this.config.description;
+            history.pushState({}, "", `/dashboard/${this.config.alias}/`); // Change URL
             alert("Dashboard Saved!");
         });
     }
 
-    /** 
+    /**
      * Download dashboard configuration as .json
      */
     exportFile() {
         try {
-            const json = JSON.stringify(this._getConfig(), null, 2);
+            const json = JSON.stringify(this._getFullConfig(), null, 2);
             const blob = new Blob([json], { type: "application/json" });
             const url = URL.createObjectURL(blob);
 
             const a = document.createElement("a");
             a.href = url;
-            a.download = `${this.alias}-config.json`;
+            a.download = `${this.config.alias}-config.json`;
             a.click();
             URL.revokeObjectURL(url);
         } 
@@ -423,12 +414,10 @@ export class Dashboard {
     async importFile(file) {
         try {
             const text = await file.text();
+            /** @type {DashboardConfigObject} */
             const config = JSON.parse(text);
             const confirm = window.confirm(`Replace all widgets with ${config.widgets.length} new widgets?`)
-            if(confirm) {
-                this.setColumnCount(config.column_count);
-                this.setupWidgets(config.widgets);
-            }
+            if(confirm) this.setupWidgets(config.widgets, config.column_count);
         } 
         catch (err) {
             alert("Error importing configuration: " + err.message);
@@ -438,11 +427,8 @@ export class Dashboard {
     /**
      * @returns {DashboardConfigObject} All data needed to recreate this dashboard
      */
-    _getConfig() {
-        return {
-            alias: this.alias,
-            description: this.description,
-            column_count: this.canvasGridStack.getColumn(),
+    _getFullConfig() {
+        return { ...this.config,
             widgets: this._getWidgets().map(widget => ({ //TODO widget method or nah?
                 tag: widget.tag?.external_id || null,
                 widget_type: widget.gridElem.dataset.type,
@@ -533,4 +519,5 @@ document.querySelectorAll('.tab-buttons button').forEach(btn => {
 
 await refreshData();
 
-var dashboard = new Dashboard();
+const alias = document.getElementById('dashboard-container').dataset.alias; // Set by Django
+var dashboard = new Dashboard(alias);

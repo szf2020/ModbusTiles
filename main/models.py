@@ -4,6 +4,7 @@ import logging
 from datetime import timedelta
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
 from django.contrib.auth import get_user_model
 from typing import Self
 
@@ -339,7 +340,8 @@ class AlarmSubscription(models.Model):
 class Dashboard(models.Model):
     """ A user-defined space to display widgets """
 
-    alias = models.SlugField(max_length=100, blank=False)
+    alias = models.SlugField(max_length=100, blank=True)
+    title = models.CharField(max_length=100, default="Untitled Dashboard")
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
     description = models.TextField(blank=True)
     preview_image = models.ImageField(upload_to='dashboard_previews/', null=True, blank=True)
@@ -352,6 +354,20 @@ class Dashboard(models.Model):
         unique_together = ("owner", "alias")
 
     def save(self, *args, **kwargs):
+        # Determine base alias
+        base_slug = slugify(self.title) if self.title else "dashboard"
+        
+        candidate = base_slug
+        counter = 1
+        
+        # Check for alias collision
+        while Dashboard.objects.filter(owner=self.owner, alias=candidate).exclude(pk=self.pk).exists():
+            candidate = f"{base_slug}-{counter}"
+            counter += 1
+        
+        self.alias = candidate
+
+        # Delete old preview image, if any
         try:
             old = Dashboard.objects.get(pk=self.pk).preview_image
         except Dashboard.DoesNotExist:
@@ -359,7 +375,6 @@ class Dashboard(models.Model):
 
         super().save(*args, **kwargs)
 
-        # Old file exists, new file is different → delete old file
         if old and old != self.preview_image:
             if os.path.isfile(old.path):
                 os.remove(old.path)

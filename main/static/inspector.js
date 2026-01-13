@@ -363,14 +363,14 @@ export class Inspector {
      */
     inspectDashboard(dashboard) { 
         this.clear();
-        const title = this.addTitle(dashboard.alias);
+        const title = this.addTitle(dashboard.title);
         const dashboardSection = this.addSection();
 
-        this.addField({ label: "Dashboard Name", type: "text" }, dashboard.newAlias, (value) => {dashboard.newAlias = value}, dashboardSection);
-        this.addField({ label: "Description", type: "text" }, dashboard.description, (value) => {dashboard.description = value}, dashboardSection);
+        this.addField({ label: "Dashboard Name", type: "text" }, dashboard.config.title, (value) => {dashboard.config.title = value}, dashboardSection);
+        this.addField({ label: "Description", type: "text" }, dashboard.config.description, (value) => {dashboard.config.description = value}, dashboardSection);
 
         const dashboardPropertiesSection = this.addSection();
-        this.addField({ label: "Columns", type: "int" }, dashboard.canvasGridStack.getColumn(), (value) => dashboard.setColumnCount(value), dashboardPropertiesSection);
+        this.addField({ label: "Columns", type: "int" }, dashboard.config.column_count, (value) => dashboard.setColumnCount(value), dashboardPropertiesSection);
 
         const saveSection = this.addSection();
         this.addButton("Save Dashboard", () => dashboard.save(), saveSection);
@@ -403,7 +403,7 @@ export class Inspector {
         const deviceOptions = serverCache.devices.map(d => ({ value: d.alias, label: d.alias }));
         const device = this.addField({ label: "Device", type: "select", options: deviceOptions }, tag?.device, null, locationSection);
         const bitIndex = this.addField({ label: "Bit Index (0-15)", type: "int" }, tag?.bit_index, tag?.bit_index, locationSection);
-        const restrictedWriteField = this.addField({ label: "Read-Only", type: "bool", description: "If the tag value should be protected from non-staff users"}, tag?.read_only, null, locationSection);
+        const restrictedWriteField = this.addField({ label: "Restricted Write", type: "bool", description: "If the tag value should be protected from non-staff users"}, tag?.restricted_write, null, locationSection);
 
         // Dynamic data type field - update according to channel type
         const dataTypeContainer = document.createElement('div');

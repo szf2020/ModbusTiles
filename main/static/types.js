@@ -34,7 +34,7 @@
  */
 
 /**
- * Object recieved from `api.serializers.AlarmSerializer` through `/api/alarms/`
+ * Object recieved from `api.serializers.AlarmSerializer` through `/api/alarms/${external_id}`
  * @typedef {Object} AlarmConfigObject
  * @property {string} tag The UUID of the tag
  * @property {string} external_id The UUID of the alarm config
@@ -108,6 +108,15 @@
  * @property {ChoiceObject[]} threat_levels Choices for alarm threat levels
  */
 
+/**
+ * Object recieved from `api.serializers.DashboardSerializer` through `/api/dashboards/${alias}`
+ * @typedef {Object} DashboardObject
+ * @property {string} alias The slug field used for routing - unique to the owner
+ * @property {string} title The display name
+ * @property {string} description User given description of dashboard, if any
+ * @property {number} column_count The number of columns in the GridStack grid
+ */
+
 /**  
  * Object recieved from `api.serializers.DashboardWidgetSerializer` through `/api/dashboard-widgets/?dashboard=${alias}`
  * @typedef {Object} DashboardWidgetInfoObject
@@ -118,11 +127,7 @@
 
 /**
  * Object used in `api.views.DashboardViewSet.save_data` through `/api/dashboards/${alias}/save-data/`
- * @typedef {Object} DashboardConfigObject
- * @property {string} alias The unique name of the Dashboard
- * @property {string} description Extra info
- * @property {number} column_count The number of columns in the GridStack grid
- * @property {DashboardWidgetInfoObject[]} widgets Config for all widgets
+ * @typedef {DashboardObject & { widgets: DashboardWidgetInfoObject[] }} DashboardConfigObject
  */
 
 export {};

@@ -19,7 +19,6 @@ from rest_framework.request import HttpRequest
 
 #TODO should the metadata views all be one class?
 #TODO better docstrings
-#TODO figure out permissions for everything
 
 class ReadOnlyViewSet(ModelViewSet):
     """ Restrict write perms to staff """
@@ -53,7 +52,7 @@ class TagViewSet(ReadOnlyViewSet):
     def get_queryset(self):
         qs = Tag.objects.all()
 
-        device_alias = self.request.query_params.get("device")
+        device_alias: str = self.request.query_params.get("device")
         if device_alias:
             qs = qs.filter(device__alias=device_alias)
 
@@ -114,7 +113,7 @@ class DashboardViewSet(ModelViewSet):
             dashboard.save(update_fields=['preview_image'])
 
         # Get widget data
-        raw_widgets = request.data.get('widgets')
+        raw_widgets: str = request.data.get('widgets')
         
         if not raw_widgets:
             return Response({"status": "saved", "widgets_count": 0})
@@ -140,23 +139,7 @@ class DashboardViewSet(ModelViewSet):
         except Exception as e:
             raise ValidationError(f"Save failed: {str(e)}")
 
-        return Response({ "status": "saved" })
-    
-    def _get_new_alias(self):
-        base = "untitled"
-        suffix = 0
-        while True:
-            candidate = f"{base}{suffix}"
-            if not Dashboard.objects.filter(owner=self.request.user, alias=candidate).exists():
-                return candidate
-            suffix += 1
-    
-    def perform_create(self, serializer):
-        alias = serializer.validated_data.get('alias')
-        if not alias:
-            alias = self._get_new_alias()
-
-        serializer.save(owner=self.request.user, alias=alias)
+        return Response({ "new_alias": dashboard.alias })
 
 
 class DashboardWidgetViewSet(ModelViewSet):
@@ -175,8 +158,8 @@ class DashboardWidgetViewSet(ModelViewSet):
             
         return qs
 
-    def perform_create(self, serializer):
-        dashboard = serializer.validated_data["dashboard"]
+    def perform_create(self, serializer: Serializer):
+        dashboard: Dashboard = serializer.validated_data["dashboard"]
 
         if dashboard.owner != self.request.user:
             raise PermissionDenied("Not your dashboard")
@@ -246,13 +229,10 @@ class AlarmMetadataView(APIView):
 class TagMultiValueView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        ids = request.query_params.get("tags", "").split(",")
-        tags = list(Tag.objects.filter(external_id__in=ids))
-
-        serialized = TagValueSerializer(
-            tags, many=True, context={"alarm_map": ActivatedAlarm.get_tag_map(tags)}
-        )
+    def get(self, request: HttpRequest):
+        ids: str = request.query_params.get("tags", "")
+        tags = list(Tag.objects.filter(external_id__in=ids.split(",")))
+        serialized = TagValueSerializer(tags, many=True, context={"alarm_map": ActivatedAlarm.get_tag_map(tags)})
 
         return Response(serialized.data)
     
@@ -264,11 +244,11 @@ class TagHistoryView(ListAPIView):
     def get_queryset(self):
         qs = TagHistoryEntry.objects.order_by("timestamp")
 
-        tags = self.request.query_params.get("tags")
+        tags: str = self.request.query_params.get("tags")
         if tags:
             qs = qs.filter(tag__external_id__in=tags.split(","))
 
-        seconds = self.request.query_params.get("seconds")
+        seconds: str = self.request.query_params.get("seconds")
         if seconds is not None:
             cutoff = timezone.now() - timedelta(seconds=int(seconds))
             qs = qs.filter(timestamp__gte=cutoff)
