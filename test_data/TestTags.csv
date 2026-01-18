@@ -1,0 +1,31 @@
+device,alias,description,channel,data_type,address,bit_index,is_active,restricted_write,history_interval,history_retention,external_id
+TestPLC,coil 0,A test coil tag,coil,bool,0,0,True,False,0:00:01,0:00:00,4f0d8964-bf89-5fe5-af1c-545b400902ae
+TestPLC,coil 2,A test coil tag,coil,bool,2,0,True,False,0:00:01,0:00:00,394a794c-cb45-58cb-9ec4-88433bd77f7f
+TestPLC,coil 4,A test coil tag,coil,bool,4,0,True,False,0:00:01,0:00:00,68ed55f9-49a0-5a7b-b678-e3785b803f2f
+TestPLC,coil 6,A test coil tag,coil,bool,6,0,True,False,0:00:01,0:00:00,a55739ca-a88d-5e40-82dc-1994787199b6
+TestPLC,coil 8,A test coil tag,coil,bool,8,0,True,False,0:00:01,0:00:00,a9453495-7657-5db5-9e9d-0ba6a94ab45b
+TestPLC,coil 10,A test coil tag,coil,bool,10,0,True,False,0:00:01,0:00:00,aefceee9-6381-57c0-bdc8-51c778bb7ea5
+TestPLC,coil 12,A test coil tag,coil,bool,12,0,True,False,0:00:01,0:00:00,93b88f0a-bea9-5d78-887d-5430f6a37dd7
+TestPLC,coil 14,A test coil tag,coil,bool,14,0,True,False,0:00:01,0:00:00,ea180804-1ddb-574f-b8fc-84984036a681
+TestPLC,di 0,A test discrete input tag,di,bool,0,0,True,False,0:00:01,0:00:00,ff51c1f9-0552-5947-acba-31268c78474c
+TestPLC,di 1,A test discrete input tag,di,bool,1,0,True,False,0:00:01,0:00:00,61f35678-faa2-5f74-9369-8a7cc758ae98
+TestPLC,di 2,A test discrete input tag,di,bool,2,0,True,False,0:00:01,0:00:00,02299ad7-86c1-50d5-86e7-895c168d5879
+TestPLC,di 3,A test discrete input tag,di,bool,3,0,True,False,0:00:01,0:00:00,dcdc440a-6ddc-55d3-b648-734ef7c1a78f
+TestPLC,di 4,A test discrete input tag,di,bool,4,0,True,False,0:00:01,0:00:00,a2f0528a-4251-5bb8-8af2-b62a59e6338a
+TestPLC,di 5,A test discrete input tag,di,bool,5,0,True,False,0:00:01,0:00:00,f05f4556-0294-54a0-864c-b024edbf0c55
+TestPLC,di 6,A test discrete input tag,di,bool,6,0,True,False,0:00:01,0:00:00,8e6c4947-d996-5ad1-ae63-9ac90f4932f8
+TestPLC,di 7,A test discrete input tag,di,bool,7,0,True,False,0:00:01,0:00:00,f3865c29-fba5-54f9-bc60-57ed15adb469
+TestPLC,hr float 0,A test holding register tag,hr,float32,0,0,True,False,0:00:01,0:00:00,c4ce759f-b6d3-51d2-a0bd-7cadd606c043
+TestPLC,hr float 2,A test holding register tag,hr,float32,2,0,True,False,0:00:01,0:00:00,c351df0a-0059-5d55-8641-a49766fe9c96
+TestPLC,hr float 4,A test holding register tag,hr,float32,4,0,True,False,0:00:01,0:00:00,d2de1bbb-1115-578c-ab76-631b5f8ef2de
+TestPLC,hr float 6,A test holding register tag,hr,float32,6,0,True,False,0:00:01,0:00:00,842d1970-6a56-5dec-9366-c5b52cf965ba
+TestPLC,ir int 0,A test input register tag,ir,uint16,0,0,True,False,0:00:01,0:00:00,1c090f11-080b-584f-9464-159bd6600ee5
+TestPLC,ir int 1,A test input register tag,ir,uint16,1,0,True,False,0:00:01,0:00:00,74d91df7-597a-534b-a81e-165cca0e832b
+TestPLC,ir int 2,A test input register tag,ir,uint16,2,0,True,False,0:00:01,0:00:00,f7ea6439-69be-5e6b-b98e-31c43054b3ec
+TestPLC,ir int 3,A test input register tag,ir,uint16,3,0,True,False,0:00:01,0:00:00,11a2fc20-fc66-5d1a-a958-4e4835acea4d
+TestPLC,hr100 bit 0,A test bitfield tag,hr,bool,100,0,True,False,0:00:01,0:00:00,cad479d9-c9df-5569-b61a-1e79d2f7dfd9
+TestPLC,hr100 bit 1,A test bitfield tag,hr,bool,100,1,True,False,0:00:01,0:00:00,9caec646-8379-537c-9dbb-f92f623cb973
+TestPLC,hr100 bit 2,A test bitfield tag,hr,bool,100,2,True,False,0:00:01,0:00:00,b309f83a-3a0d-56b1-99ac-b3dcd2439e94
+TestPLC,hr100 bit 3,A test bitfield tag,hr,bool,100,3,True,False,0:00:01,0:00:00,0578ef20-c80a-546b-af09-c5baab951f3f
+TestPLC,hr100 bit 4,A test bitfield tag,hr,bool,100,4,True,False,0:00:01,0:00:00,52c2afbe-772e-5385-b3da-4f358d91bd96
+TestPLC,chart tag,A float tag for testing the chart,ir,float32,32,0,True,False,0:00:03,0:01:00,c0adc73c-114c-5092-b1fa-938a950e9bd9

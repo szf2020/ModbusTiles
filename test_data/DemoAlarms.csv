@@ -1,0 +1,4 @@
+tag,trigger_value,operator,enabled,alias,message,threat_level,notification_cooldown
+8bfd8281-55e9-40ae-acd1-4b29e32d27dd,True,equals,True,freeze_stat_trip,CRITICAL: AHU Freeze Protection Trip. Manual Reset Required.,crit,0:01:00
+4bf3a75d-a96e-4c9f-81bc-08a9edc7c87e,1.5,greater_than,True,filter_dirty,Filter Dirty - Maintenance Required,low,0:01:00
+586f0e20-306e-4f1e-a0a6-7d6a74b652d8,78.0,greater_than,True,high_temp_warning,Space Temperature High,high,0:01:00

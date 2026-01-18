@@ -29,7 +29,7 @@ class BaseModbusSimulator(BaseCommand, ABC):
         self.interval = options["interval"]
         size = options["size"]
         
-        # 1. Setup Memory
+        # Memory
         store = ModbusDeviceContext(
             di=ModbusSequentialDataBlock(0, [0] * size),
             co=ModbusSequentialDataBlock(0, [0] * size),
@@ -38,15 +38,17 @@ class BaseModbusSimulator(BaseCommand, ABC):
         )
         self.context = ModbusServerContext(devices=store, single=True)
 
-        # 2. Hook for subclasses to init data
+        # Setup
+        logger.info("Setting up simulation...")
         self.setup_simulation()
 
-        # 3. Background Thread
+        # Sim Thread
         thread = threading.Thread(target=self._loop)
         thread.daemon = True
         thread.start()
 
-        self.stdout.write(self.style.SUCCESS(f"--> Simulator running on port {self.port}"))
+        # Server
+        logger.info(f"Simulator running on port {self.port}")
         StartTcpServer(context=self.context, address=("0.0.0.0", self.port))
 
     def _loop(self):
@@ -68,15 +70,10 @@ class BaseModbusSimulator(BaseCommand, ABC):
         """ Optional hook for initialization """
         pass
 
-    # ---------- Unified I/O Logic ----------
-
-
     def read_tag(self, tag: Tag):
         """ Direct read from memory based on Tag attributes """
 
         count = tag.pymodbus_datatype.value[1]
-        if count == 0: count = 1 # Handle strings or dynamic types if necessary
-
         vals = self.context[0].getValues(tag.modbus_function_code, tag.address, count=count)
         return ModbusBaseClient.convert_from_registers(vals, data_type=tag.pymodbus_datatype, word_order="big") #self.word_order
 

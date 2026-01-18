@@ -1,0 +1,2 @@
+alias,ip_address,port,protocol,word_order,is_active
+TestPLC,127.0.0.1,503,tcp,big,True

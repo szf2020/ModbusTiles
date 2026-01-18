@@ -1,0 +1,4 @@
+tag,trigger_value,operator,enabled,alias,message,threat_level,notification_cooldown
+aefceee9-6381-57c0-bdc8-51c778bb7ea5,True,equals,True,test alarm 1,testing alarm 1,low,0:01:00
+93b88f0a-bea9-5d78-887d-5430f6a37dd7,True,equals,True,test alarm 2,testing alarm 2,high,0:01:00
+ea180804-1ddb-574f-b8fc-84984036a681,True,equals,True,test alarm 3,testing alarm 3,crit,0:01:00
