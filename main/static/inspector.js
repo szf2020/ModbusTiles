@@ -516,7 +516,7 @@ export class Inspector {
                 if(window.confirm(`Are you sure you want to delete tag ${tag.alias}?`)) {
                     requestServer(`/api/tags/${tag.external_id}/`, 'DELETE', null, async () => {
                         alert("Tag deleted.");
-                        serverCache.tags.delete(tag.external_id);
+                        delete serverCache.tags[tag.external_id];
                         this.inspectTag(); 
                     });
                 }
@@ -636,7 +636,7 @@ export class Inspector {
                 if(window.confirm(`Are you sure you want to delete alarm ${alarm.alias}?`)) {
                     requestServer(`/api/alarms/${alarm.external_id}/`, 'DELETE', null, async () => {
                         alert("Alarm deleted.");
-                        serverCache.alarms.delete(alarm.external_id);
+                        delete serverCache.alarms[alarm.external_id];
                         this.inspectAlarm(); 
                     });
                 }

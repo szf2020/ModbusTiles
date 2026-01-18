@@ -49,10 +49,21 @@ class TagImporter(BaseCSVImporter):
 
     def clean_row(self, row: dict):
         row["device"] = Device.objects.get(alias=row["device"]) #TODO just use alias as PK?
+
+        row["address"] = int(row["address"])
+
+        if "unit_id" in row:
+            row["unit_id"] = int(row["unit_id"])
+
+        if "bit_index" in row:
+            row["bit_index"] = int(row["bit_index"])
+
         if "history_interval" in row:
             row["history_interval"] = parse_duration(row["history_interval"]) 
+
         if "history_retention" in row:
             row["history_retention"] = parse_duration(row["history_retention"]) 
+
         return super().clean_row(row)
     
 

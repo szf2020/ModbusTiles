@@ -7,8 +7,6 @@ from ...api.views import DashboardViewSet
 from ...models import Tag, Dashboard
 from ...services.io_csv import DeviceImporter, TagImporter, AlarmConfigImporter
 
-from ...models import Device
-from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -120,5 +118,6 @@ class Command(BaseModbusSimulator):
         self.write_tag(self.outdoor_temp_tag, 85)
         self.write_tag(self.return_temp_tag, 75)
         self.write_tag(self.temp_setpoint_tag, 72)
+        self.write_tag(self.cooling_valve_tag, 50)
 
         self.filter_dirt = 0.5

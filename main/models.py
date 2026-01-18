@@ -7,6 +7,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from pymodbus.client.base import ModbusBaseClient
 
 
@@ -161,6 +162,36 @@ class Tag(models.Model):
             self.ChannelChoices.HOLDING_REGISTER: 3,
             self.ChannelChoices.INPUT_REGISTER: 4,
         }[self.channel]
+    
+    def clean(self):
+        super().clean()
+
+        if not (0 <= self.bit_index <= 15):
+            raise ValidationError({ "bit_index": "Bit index must be between 0 and 15" })
+        
+        self_size = self.get_read_count()
+        self_start = self.address
+        self_end = self_start + self_size
+
+        siblings = Tag.objects.filter(device=self.device, channel=self.channel, unit_id=self.unit_id).exclude(pk=self.pk)
+
+        # Check memory overlaps
+        for sibling in siblings:
+            sib_size = sibling.get_read_count()
+            sib_start = sibling.address
+            sib_end = sib_start + sib_size
+            
+            has_overlap = max(self_start, sib_start) < min(self_end, sib_end)
+            
+            if has_overlap:
+                # Allow same register if bit indexed
+                if self.is_bit_indexed and sibling.is_bit_indexed and (self_start == sib_start):
+                    continue 
+
+                raise ValidationError({
+                    "address": f"Memory overlap with tag '{sibling}' "
+                    f"Range [{self_start}-{self_end}] conflicts with [{sib_start}-{sib_end}]."
+                })
     
     def __str__(self):
         bit = f":{self.bit_index}" if self.bit_index is not None else ""

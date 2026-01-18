@@ -1,6 +1,7 @@
 from datetime import timedelta
 from rest_framework import serializers
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 from ..models import Device, Tag, AlarmConfig, ActivatedAlarm, AlarmSubscription, Dashboard, DashboardWidget, TagWriteRequest
 
 
@@ -48,11 +49,14 @@ class TagSerializer(serializers.ModelSerializer):
         exclude = ["owner"]
 
     def validate(self, attrs):
-        bit_index = attrs.get("bit_index")
+        instance = self.instance or Tag()
+        for attr, value in attrs.items():
+            setattr(instance, attr, value)
 
-        if bit_index is not None:
-            if not 0 <= bit_index <= 15:
-                raise serializers.ValidationError("Bit index must be between 0 and 15")
+        try:
+            instance.clean()
+        except ValidationError as e:
+            raise serializers.ValidationError(e.message_dict)
 
         return attrs
 
